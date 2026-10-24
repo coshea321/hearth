@@ -40,6 +40,11 @@ module.exports = {
           shortNames[0] === 'Seated Centering' && /Savasana/.test(shortNames[shortNames.length-1]), shortNames.join(', '));
         ok('short flow drops the half splits and Warrior I',
           !shortNames.some(function(n){ return /Half Splits|Warrior I /.test(n); }), shortNames.join(', '));
+        // Short goes Mountain -> Warrior II with no Warrior I, so each Warrior II
+        // must say how to get into the stance itself (Codex review on PR #279).
+        var w2 = buildSlottedFlow(0, true).filter(function(p){ return /^Warrior II/.test(p.name); });
+        ok('each Warrior II sets up its own stance as its first cue',
+          w2.length === 2 && w2.every(function(p){ return /foot back/.test(p.cues[0]); }), JSON.stringify(w2.map(function(p){ return p.cues[0]; })));
         var full = buildSlottedFlow(0, false), sh = buildSlottedFlow(0, true);
         ok('short flow is about 12 minutes, full about 20',
           Math.round(yogaFlowTotal(sh)/60) === 12 && Math.round(yogaFlowTotal(full)/60) === 20,
