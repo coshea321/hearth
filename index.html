@@ -668,6 +668,7 @@ body.train-mode #toast{background:#3A3328}
 .yv-btns{display:flex;gap:4px;flex-shrink:0}
 /* 32px clears WCAG 2.2 AA (2.5.8 wants 24x24) - see the History button note. */
 .yv-btn{font-size:11px;font-weight:600;padding:5px 9px;min-height:32px;border:1px solid #E0DCD4;background:#FAF8F4;color:#8A7A5A;border-radius:7px;cursor:pointer}
+.yv-sel{flex:2;min-width:0;font-family:inherit;font-size:12px;min-height:32px;padding:4px 6px;border:1px solid #E0DCD4;border-radius:7px;background:#FAF8F4;color:#5A4A30}
 .yv-btn.on{background:#8b5cf6;border-color:#8b5cf6;color:#fff}
 /* v477: the Knee Programme's Basic/Full picker. Two wide buttons rather than
    the yv- row pair, because each one needs a line saying what it means. */
@@ -1071,7 +1072,7 @@ li.rcp-done.rcp-ing{text-decoration:line-through}
     </div>
     <div class="home-week-strip" id="homeWeekStrip"></div>
 
-    <div style="text-align:center;margin-top:20px;font-size:11px;color:#C8BEA8;font-weight:600;letter-spacing:.4px" id="appVersionLabel">v509 · 24/10/2026</div>
+    <div style="text-align:center;margin-top:20px;font-size:11px;color:#C8BEA8;font-weight:600;letter-spacing:.4px" id="appVersionLabel">v510 · 24/10/2026</div>
 
   </div>
 </div>
@@ -21841,6 +21842,63 @@ function yogaSpeechStop() {
   if (!yogaVoiceSupported()) return;
   try { window.speechSynthesis.cancel(); } catch(e) {}
 }
+// v510: a choice of VOICE and SPEED. The app can only use the voices the
+// phone itself has installed (speechSynthesis.getVoices) — more can be
+// downloaded in the phone's own settings. Device-local like the rest:
+// `fl4_yoga_voice_name` holds a voiceURI ("" = the phone's default) and
+// `fl4_yoga_voice_rate` "slow"/"fast" (anything else = normal, 0.9 as v509).
+// A saved voice the phone no longer has falls back to the default, silently.
+var YOGA_VOICE_RATES = { slow: 0.75, normal: 0.9, fast: 1.1 };
+function yogaVoiceRateKey() {
+  var r = storeGet("fl4_yoga_voice_rate");
+  return YOGA_VOICE_RATES.hasOwnProperty(r) ? r : "normal";
+}
+function setYogaVoiceRate(which) {
+  storeSet("fl4_yoga_voice_rate", YOGA_VOICE_RATES.hasOwnProperty(which) ? which : "normal");
+  if (SS && SS.type === "yoga") renderYogaSession();
+}
+// English voices only — the cues are English text. Sorted by name.
+function yogaVoiceList() {
+  if (!yogaVoiceSupported()) return [];
+  var all = [];
+  try { all = window.speechSynthesis.getVoices() || []; } catch(e) {}
+  return all.filter(function(v){ return /^en([-_]|$)/i.test(v.lang || ""); })
+    .sort(function(a, b){ return a.name.localeCompare(b.name); });
+}
+function yogaVoicePicked() {
+  var uri = storeGet("fl4_yoga_voice_name");
+  if (!uri) return null;
+  return yogaVoiceList().filter(function(v){ return v.voiceURI === uri; })[0] || null;
+}
+function setYogaVoiceName(uri) {
+  storeSet("fl4_yoga_voice_name", typeof uri === "string" ? uri : "");
+  yogaVoiceTest();
+}
+// Every utterance goes through here, so the voice and speed apply everywhere.
+function yogaUtterance(text) {
+  var u = new SpeechSynthesisUtterance(text);
+  var v = yogaVoicePicked();
+  if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = "en-GB"; }
+  u.rate = YOGA_VOICE_RATES[yogaVoiceRateKey()];
+  return u;
+}
+// The intro's Test button: says the first pose of the current flow.
+function yogaVoiceTest() {
+  if (!yogaVoiceSupported() || !SS || SS.type !== "yoga" || !SS.yFlow || !SS.yFlow.length) return;
+  try {
+    window.speechSynthesis.cancel();
+    yogaSpeechParts(SS.yFlow[0]).slice(0, 2).forEach(function(t){ window.speechSynthesis.speak(yogaUtterance(t)); });
+  } catch(e) {}
+}
+// Voices load late on Chrome; repaint the intro once they arrive so the list fills.
+if (typeof window.speechSynthesis !== "undefined") {
+  try {
+    window.speechSynthesis.addEventListener("voiceschanged", function(){
+      if (typeof SS !== "undefined" && SS && SS.type === "yoga" && SS.yPhase === "intro") renderYogaSession();
+    });
+  } catch(e) {}
+}
+
 // Speaks the pose NAME then its short `cues` — never the Details paragraph.
 // All-caps emphasis ("FLAT", "BEHIND") is lowered so engines don't spell it.
 function yogaSpeechParts(pose) {
@@ -21864,9 +21922,7 @@ function yogaSpeakIfDue() {
   try {
     window.speechSynthesis.cancel();
     parts.forEach(function(t){
-      var u = new SpeechSynthesisUtterance(t);
-      u.lang = "en-GB"; u.rate = 0.9;
-      window.speechSynthesis.speak(u);
+      window.speechSynthesis.speak(yogaUtterance(t));
     });
   } catch(e) {}
 }
@@ -22309,6 +22365,23 @@ function yogaSessionOptsHtml() {
       btn(on,  "On",  "Spoken cues: on",  "setYogaVoice('on')") +
       btn(!on, "Off", "Spoken cues: off", "setYogaVoice('off')") +
     "</div></div>";
+    // v510: voice and speed, shown only while spoken cues are on.
+    if (on) {
+      var cur = storeGet("fl4_yoga_voice_name") || "", picked = yogaVoicePicked(), rk = yogaVoiceRateKey();
+      var opts = "<option value=''" + (picked ? "" : " selected") + ">Phone default</option>" +
+        yogaVoiceList().map(function(v){
+          return "<option value='" + esc(v.voiceURI) + "'" + (picked && v.voiceURI === cur ? " selected" : "") + ">" +
+            esc(v.name) + " (" + esc(v.lang) + ")</option>";
+        }).join("");
+      rows += "<div class='yv-row'><div class='yv-lab'>Voice</div>" +
+        "<select class='yv-sel' aria-label='Voice' onchange='setYogaVoiceName(this.value)'>" + opts + "</select>" +
+        btn(false, "&#x1F50A; Test", "Test the voice", "yogaVoiceTest()") + "</div>" +
+        "<div class='yv-row'><div class='yv-lab'>Speed</div><div class='yv-btns'>" +
+          btn(rk === "slow",   "Slow",   "Speed: slow",   "setYogaVoiceRate('slow')") +
+          btn(rk === "normal", "Normal", "Speed: normal", "setYogaVoiceRate('normal')") +
+          btn(rk === "fast",   "Fast",   "Speed: fast",   "setYogaVoiceRate('fast')") +
+        "</div></div>";
+    }
   }
   if (!rows) return "";
   return "<div class='yv-wrap'><div class='yv-hdr'>Session &middot; remembered</div>" + rows + "</div>";
