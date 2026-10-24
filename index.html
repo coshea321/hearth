@@ -735,6 +735,7 @@ body.train-mode #toast{background:#3A3328}
 .ses-ctrl-btn{background:#F0EBE0;border:1px solid #E8E2D6;color:#5A4A30;border-radius:10px;padding:10px 22px;font-family:inherit;font-size:13px;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .ses-ctrl-back{padding:10px 16px;opacity:.7}
 .ses-reps-display{text-align:center;padding:20px 0 12px}
+.ses-voice-btn{display:block;margin:4px auto 0;background:none;border:1px solid #E8E2D6;border-radius:8px;padding:7px 14px;min-height:32px;color:#8A7A5A;font-family:inherit;font-size:12px;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .ses-exit-link{display:block;text-align:center;background:none;border:none;color:#E8E2D6;font-family:inherit;font-size:12px;cursor:pointer;margin-top:10px;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 
 /* Physio */
@@ -1070,7 +1071,7 @@ li.rcp-done.rcp-ing{text-decoration:line-through}
     </div>
     <div class="home-week-strip" id="homeWeekStrip"></div>
 
-    <div style="text-align:center;margin-top:20px;font-size:11px;color:#C8BEA8;font-weight:600;letter-spacing:.4px" id="appVersionLabel">v508 · 07/10/2026</div>
+    <div style="text-align:center;margin-top:20px;font-size:11px;color:#C8BEA8;font-weight:600;letter-spacing:.4px" id="appVersionLabel">v509 · 24/10/2026</div>
 
   </div>
 </div>
@@ -21585,35 +21586,41 @@ var YOGA_FB_SLOT_ORDER = ['trunk','cat','floss','mountain','bridge','kneehug','s
 // The flow with its slots un-expanded. A `{slot:'x'}` marker is replaced by the
 // chosen pose or poses at build time; `kneehug` expands to TWO poses on the
 // reviewed side and one on the original, so the flow length is not fixed.
+//
+// v509: `inShort:true` marks the 15 entries the SHORT version keeps (~12 min,
+// Cathal 24/10/2026). It sits on the BASE entry, so a slot keeps whichever side
+// is chosen — the short flow is the same reviewed/original choices, fewer poses.
+// Do NOT give the short version its own pose array: two copies of a pose is how
+// a cue gets fixed in one of them only.
 var YOGA_FB_BASE = [
-  {name:'Seated Centering',sanskrit:'Sukhasana',dur:60,cue:'Sit cross-legged, using a folded blanket under your hips if needed to tilt the pelvis forward. Rest hands on knees, palms up. Close your eyes. Inhale slowly for 4 counts, filling from the belly upward. Exhale for 6 counts, letting the shoulders soften. Set an intention for your practice. Sit up on a firm cushion or block high enough that your hips end up above your knees — perched rather than slumped, so the lower back is not held rounded for the whole minute.',cues:["Sit up on a cushion or block, hips above knees","Hands on knees, palms up, eyes closed","In for 4, out for 6","Perched, not slumped"]},
+  {name:'Seated Centering',inShort:true,sanskrit:'Sukhasana',dur:60,cue:'Sit cross-legged, using a folded blanket under your hips if needed to tilt the pelvis forward. Rest hands on knees, palms up. Close your eyes. Inhale slowly for 4 counts, filling from the belly upward. Exhale for 6 counts, letting the shoulders soften. Set an intention for your practice. Sit up on a firm cushion or block high enough that your hips end up above your knees — perched rather than slumped, so the lower back is not held rounded for the whole minute.',cues:["Sit up on a cushion or block, hips above knees","Hands on knees, palms up, eyes closed","In for 4, out for 6","Perched, not slumped"]},
   {name:'Neck and Shoulder Rolls',sanskrit:'Seated Mobilisation',dur:30,cue:"Sitting tall, drop your right ear toward your shoulder — don't force it. Slowly roll your chin to your chest, then your left ear to the left shoulder. Reverse the direction. Then roll both shoulders forward 3 times, backward 3 times. Move slowly and follow your breath.",cues:["Right ear down, chin across the chest, left ear","Then reverse the direction","Shoulders: 3 rolls forward, 3 back","Slow — never force the end of the range"]},
-  {name:'Pelvic Tilts',sanskrit:'Lumbar warm-up',dur:30,cue:"Lie on your back with knees bent and feet flat. Gently flatten your lower back against the mat by tightening your deep abdominals and tilting your pelvis upward slightly. Hold 2 seconds, then release back to neutral. Move slowly and with control. Keep breathing — this is a light tilt, not a hard brace.",url:'https://www.youtube.com/watch?v=GKz3q3-12-g',cues:["Knees bent, feet flat","Tilt the pelvis so the low back flattens gently","Hold 2 seconds, release to neutral","A light tilt, not a hard brace — keep breathing"]},
-  {slot:'trunk'},
-  {slot:'cat'},
+  {name:'Pelvic Tilts',inShort:true,sanskrit:'Lumbar warm-up',dur:30,cue:"Lie on your back with knees bent and feet flat. Gently flatten your lower back against the mat by tightening your deep abdominals and tilting your pelvis upward slightly. Hold 2 seconds, then release back to neutral. Move slowly and with control. Keep breathing — this is a light tilt, not a hard brace.",url:'https://www.youtube.com/watch?v=GKz3q3-12-g',cues:["Knees bent, feet flat","Tilt the pelvis so the low back flattens gently","Hold 2 seconds, release to neutral","A light tilt, not a hard brace — keep breathing"]},
+  {slot:'trunk',inShort:true},
+  {slot:'cat',inShort:true},
   {name:'Quadruped Scapular Press',sanskrit:'Shoulder girdle',dur:30,cue:"Stay in tabletop with your elbows straight the whole time — the movement happens only at the shoulder blades. Let your chest sink a small amount as the blades draw together, then exhale and press the floor away so the upper back rounds slightly. Small, slow, about 10 reps. This adds the shoulder work the flow was missing without adding a plank.",cues:["Stay in tabletop, elbows straight throughout","Let the chest sink, shoulder blades draw together","Exhale, press the floor away, upper back rounds","Small and slow, about 10"]},
-  {name:'Bird Dog',sanskrit:'Dandayamna Bharmanasana',dur:50,cue:"From tabletop, draw your navel in gently. Extend your right arm forward and left leg back — keep the leg no higher than hip height, lower is fine. Exhale as you extend and don't let the lower back arch. Hips stay level. Hold 3 steady breaths, lower slowly. Switch sides. 3 rounds each.",cues:["Draw the navel in gently","Opposite arm and leg — leg no higher than the hip","Exhale as you extend, and don't let the back arch","Hips level. 3 breaths, then switch"]},
-  {name:"Supported Child's Pose",sanskrit:'Utthita Balasana',dur:45,cue:"Knees wide apart, hips sinking back toward the heels, with a bolster or stacked cushions under your chest so the torso is propped rather than folded flat. Forehead rests, arms reach forward. Breathe into the back of your ribcage. Keep the prop high enough that this stays a rest rather than a maximal fold — with a disc bulge the depth of the fold is not what makes it useful. If folding brings on reflux or upper-abdominal pressure, skip it and rock gently back and forth in tabletop instead.",cues:["Knees wide, hips sinking back toward the heels","Bolster or cushions under the chest","Keep the prop high — a rest, not a deep fold","Breathe into the back of the ribs","Reflux? Rock in tabletop instead"]},
-  {name:'Low Lunge Right',sanskrit:'Anjaneyasana',dur:45,cue:"Step right foot forward, lower left knee to mat, top of foot flat. Use a shorter stance than usual. Tuck the tailbone slightly and stack the ribs over the hips, then shift forward only until you feel the left hip flexor. Both hands rest on your right thigh or your hips — keep the torso tall rather than arching back.",cues:["Right foot forward, left knee down, top of foot flat","Shorter stance than usual","Tailbone tucked, ribs stacked over the hips","Hands on the front thigh — no arching back"]},
+  {name:'Bird Dog',inShort:true,sanskrit:'Dandayamna Bharmanasana',dur:50,cue:"From tabletop, draw your navel in gently. Extend your right arm forward and left leg back — keep the leg no higher than hip height, lower is fine. Exhale as you extend and don't let the lower back arch. Hips stay level. Hold 3 steady breaths, lower slowly. Switch sides. 3 rounds each.",cues:["Draw the navel in gently","Opposite arm and leg — leg no higher than the hip","Exhale as you extend, and don't let the back arch","Hips level. 3 breaths, then switch"]},
+  {name:"Supported Child's Pose",inShort:true,sanskrit:'Utthita Balasana',dur:45,cue:"Knees wide apart, hips sinking back toward the heels, with a bolster or stacked cushions under your chest so the torso is propped rather than folded flat. Forehead rests, arms reach forward. Breathe into the back of your ribcage. Keep the prop high enough that this stays a rest rather than a maximal fold — with a disc bulge the depth of the fold is not what makes it useful. If folding brings on reflux or upper-abdominal pressure, skip it and rock gently back and forth in tabletop instead.",cues:["Knees wide, hips sinking back toward the heels","Bolster or cushions under the chest","Keep the prop high — a rest, not a deep fold","Breathe into the back of the ribs","Reflux? Rock in tabletop instead"]},
+  {name:'Low Lunge Right',inShort:true,sanskrit:'Anjaneyasana',dur:45,cue:"Step right foot forward, lower left knee to mat, top of foot flat. Use a shorter stance than usual. Tuck the tailbone slightly and stack the ribs over the hips, then shift forward only until you feel the left hip flexor. Both hands rest on your right thigh or your hips — keep the torso tall rather than arching back.",cues:["Right foot forward, left knee down, top of foot flat","Shorter stance than usual","Tailbone tucked, ribs stacked over the hips","Hands on the front thigh — no arching back"]},
   {name:'Half Splits Right',sanskrit:'Ardha Hanumanasana',dur:45,cue:'From Low Lunge, shift hips back over your left knee and straighten the right leg — flex the foot. Hinge forward from the hips with a long, flat back rather than rounding. Rest hands on the mat or your shin. Don\'t chase depth; a light stretch behind the right leg is enough. Use blocks or your shin — if you have to round your back to reach the floor, don\'t reach the floor.',cues:["Hips back over the left knee, right leg straight","Flex the right foot","Hinge from the hips, back long and flat","Blocks or shin — never round the back to reach the floor"]},
-  {name:'Low Lunge Left',sanskrit:'Anjaneyasana',dur:45,cue:'Step left foot forward, right knee lowers to mat. Short stance, tailbone tucked slightly, ribs stacked. Shift gently forward to open the right hip flexor. Hands to your left thigh or hips, chest open, shoulders relaxed away from ears. No backward arching.',cues:["Left foot forward, right knee down","Short stance, tailbone tucked, ribs stacked","Shift forward to feel the right hip flexor","Hands on the thigh, chest open, no backward arch"]},
+  {name:'Low Lunge Left',inShort:true,sanskrit:'Anjaneyasana',dur:45,cue:'Step left foot forward, right knee lowers to mat. Short stance, tailbone tucked slightly, ribs stacked. Shift gently forward to open the right hip flexor. Hands to your left thigh or hips, chest open, shoulders relaxed away from ears. No backward arching.',cues:["Left foot forward, right knee down","Short stance, tailbone tucked, ribs stacked","Shift forward to feel the right hip flexor","Hands on the thigh, chest open, no backward arch"]},
   {name:'Half Splits Left',sanskrit:'Ardha Hanumanasana',dur:45,cue:'Shift hips back over your right knee, straighten the left leg — flex the foot. Hinge forward from the hips with a long spine, not a rounded back. Hands to the floor, a block or your shin for support. Light stretch only — if reaching lower means rounding the back, stay high.',cues:["Hips back over the right knee, left leg straight","Flex the left foot","Hinge from the hips with a long spine","Stay high rather than round the back"]},
   {slot:'floss'},
-  {slot:'mountain'},
+  {slot:'mountain',inShort:true},
   {name:'Side Stretch Right',sanskrit:'Parsva Urdhva Hastasana',dur:30,cue:'Right arm sweeps overhead. Lean gently to the left — keep both hips square and grounded. Feel a long line from your right hip to your fingertips. Left hand rests on your thigh for support. Keep it small, and make it a lengthening of the upper side rather than a bend in the lower back — leaning closes the foramen on the side you lean toward, and yours are narrowed on both. Hold 4 slow breaths.',cues:["Right arm overhead, lean gently to the left","Both hips square and grounded","Long through the ribs, minimal bend at the waist","Keep it small. 4 slow breaths"]},
   {name:'Side Stretch Left',sanskrit:'Parsva Urdhva Hastasana',dur:30,cue:'Left arm sweeps overhead. Lean gently to the right. Both feet grounded equally. Create length through the entire left side of the body. Right hand rests lightly on your thigh. Same rule — long through the ribs, minimal bend at the waist. 4 breaths.',cues:["Left arm overhead, lean gently to the right","Both feet grounded evenly","Length down the left side, not a bend at the waist","4 breaths"]},
   {name:'Supported Tree Right',sanskrit:'Vrksasana',dur:30,cue:"Fingertips of one hand on a wall or the back of a chair. Stand on the right leg, place the left foot against the right ankle, calf or inner thigh — never against the knee itself. Hips level, tailbone slightly tucked, gaze steady on one point. Balance work like this is the piece most stenosis programmes leave out.",cues:["Fingertips on a wall or the back of a chair","Stand on the right leg","Left foot to the ankle, calf or inner thigh — never the knee","Hips level, tailbone tucked, gaze on one point"]},
   {name:'Supported Tree Left',sanskrit:'Vrksasana',dur:30,cue:"Switch sides — fingertips still on the wall or chair. Stand on the left leg, right foot to the left ankle, calf or inner thigh, avoiding the knee. Stay tall, breathe steadily, and use as much hand support as you need. Coming out and going back in counts as practice.",cues:["Fingertips still on the wall or chair","Stand on the left leg","Right foot to ankle, calf or inner thigh — avoid the knee","Use as much hand support as you need"]},
   {name:'Warrior I Right',sanskrit:'Virabhadrasana I',dur:50,cue:"Step left foot back into a shorter stance than usual, turn it out to 45°. Square hips toward the front. Bend the right knee over the ankle. Tuck the tailbone a little and draw the lower ribs in. Hands can stay on your hips — only take the arms overhead if that doesn't arch your lower back.",cues:["Left foot back, turned out 45°, shorter stance","Hips square to the front","Right knee bends over the ankle","Tailbone tucked, lower ribs drawn in","Hands on hips — overhead only if the back stays flat"]},
   {name:'Warrior I Left',sanskrit:'Virabhadrasana I',dur:50,cue:"Step right foot back, shorter stance, turned out to 45°. Square hips toward the front, bend into the left knee. Ribs stacked over the pelvis, tailbone slightly tucked. Hands on hips, or overhead only if the back stays neutral.",cues:["Right foot back, turned out 45°, short stance","Hips square, bend into the left knee","Ribs stacked over the pelvis, tailbone tucked","Hands on hips, or overhead if the back stays neutral"]},
-  {name:'Warrior II Right',sanskrit:'Virabhadrasana II',dur:45,cue:'From Warrior I, open your arms wide — right forward, left back, parallel to the floor. Open the left hip out to the side. Gaze over your right fingertips. Torso stacked upright between the hips — don\'t lean forward or arch back. Sink into the right knee only as far as is comfortable.',cues:["Arms wide — right forward, left back, parallel to the floor","Left hip opens out to the side","Gaze over the right fingertips","Torso stacked upright — don't lean forward or arch back"]},
-  {name:'Warrior II Left',sanskrit:'Virabhadrasana II',dur:45,cue:'Left arm extends forward, right arm reaches back. Gaze over your left fingertips. Both arms reach actively in opposite directions. Torso upright, ribs down. Deepen the bend in the left knee without letting it collapse inward.',cues:["Left arm forward, right arm back","Gaze over the left fingertips","Reach actively in both directions","Ribs down; left knee tracks out, never inward"]},
-  {slot:'bridge'},
+  {name:'Warrior II Right',inShort:true,sanskrit:'Virabhadrasana II',dur:45,cue:'From Warrior I — or from standing, step the left foot back into a shorter stance than usual, foot turned out, and bend the right knee over the ankle — open your arms wide: right forward, left back, parallel to the floor. Open the left hip out to the side. Gaze over your right fingertips. Torso stacked upright between the hips — don\'t lean forward or arch back. Sink into the right knee only as far as is comfortable.',cues:["Left foot back, shorter stance, right knee over the ankle","Arms wide — right forward, left back, parallel to the floor","Left hip opens out to the side","Gaze over the right fingertips","Torso stacked upright — don't lean forward or arch back"]},
+  {name:'Warrior II Left',inShort:true,sanskrit:'Virabhadrasana II',dur:45,cue:'Switch sides: step the right foot back into the same shorter stance, foot turned out, and bend the left knee over the ankle. Left arm extends forward, right arm reaches back. Gaze over your left fingertips. Both arms reach actively in opposite directions. Torso upright, ribs down. Deepen the bend in the left knee without letting it collapse inward.',cues:["Switch sides: right foot back, short stance, left knee bent","Left arm forward, right arm back","Gaze over the left fingertips","Reach actively in both directions","Ribs down; left knee tracks out, never inward"]},
+  {slot:'bridge',inShort:true},
   {name:'Reclined Butterfly',sanskrit:'Supta Baddha Konasana',dur:60,cue:"Soles of the feet together, knees falling open. If lying flat brings on reflux, prop your whole upper torso on a wedge or a bolster running the length of your spine so the chest sits above the stomach. One hand on the belly, one on the chest. Nothing to do here — just breathe and let gravity work.",cues:["Soles of the feet together, knees falling open","Reflux? Prop the whole upper torso on a wedge","One hand on the belly, one on the chest","Nothing to do here — just breathe"]},
-  {name:'Supine Twist Right',sanskrit:'Supta Matsyendrasana',dur:30,cue:'Bring both knees up, then let them fall to the right. Extend your left arm out at shoulder height, palm facing up. Keep both shoulders heavy on the mat. Gaze toward the ceiling or gently to the left. Rest the knees on a cushion so they are supported rather than hanging, and keep the twist small — don\'t use the exhales to travel further. Rotation narrows the foramen, and yours are narrowed on both sides.',cues:["Knees up, then let them fall to the right","Cushion under the knees so they rest, not hang","Left arm wide, palm up, both shoulders heavy","Keep it small — don't travel further on the exhale"]},
-  {name:'Supine Twist Left',sanskrit:'Supta Matsyendrasana',dur:30,cue:'Bring knees back to centre, then let them fall to the left. Right arm extends wide, palm up. Cushion under the knees again. Let the exhales release the upper back and shoulders rather than deepen the twist — small and supported is the point here, not range.',cues:["Knees back to centre, then over to the left","Cushion under the knees again","Right arm wide, palm up","Exhale into the shoulders, not deeper into the twist"]},
+  {name:'Supine Twist Right',inShort:true,sanskrit:'Supta Matsyendrasana',dur:30,cue:'Bring both knees up, then let them fall to the right. Extend your left arm out at shoulder height, palm facing up. Keep both shoulders heavy on the mat. Gaze toward the ceiling or gently to the left. Rest the knees on a cushion so they are supported rather than hanging, and keep the twist small — don\'t use the exhales to travel further. Rotation narrows the foramen, and yours are narrowed on both sides.',cues:["Knees up, then let them fall to the right","Cushion under the knees so they rest, not hang","Left arm wide, palm up, both shoulders heavy","Keep it small — don't travel further on the exhale"]},
+  {name:'Supine Twist Left',inShort:true,sanskrit:'Supta Matsyendrasana',dur:30,cue:'Bring knees back to centre, then let them fall to the left. Right arm extends wide, palm up. Cushion under the knees again. Let the exhales release the upper back and shoulders rather than deepen the twist — small and supported is the point here, not range.',cues:["Knees back to centre, then over to the left","Cushion under the knees again","Right arm wide, palm up","Exhale into the shoulders, not deeper into the twist"]},
   {slot:'kneehug'},
-  {slot:'savasana'}
+  {slot:'savasana',inShort:true}
 ];
 
 
@@ -21743,13 +21750,17 @@ function yogaVariantOf(id) { return yogaVariantPrefs()[id] === "orig" ? "orig" :
 // "All reviewed / All original" row on top of the picker — Hips & Lower Back
 // only (Cathal, 22/09/2026: its fourteen switches were too many to flip one by
 // one). Full Body keeps its seven without it; that was not asked for.
+// v509: `voice:true` turns on the spoken cues for that flow (Full Body only —
+// its poses carry short `cues`; Hips has paragraphs only). A flow offers the
+// short version only if its base marks entries `inShort` (yogaHasShort).
 var YOGA_SLOTTED = {
-  0: { base: YOGA_FB_BASE,  slots: YOGA_FB_SLOTS,  order: YOGA_FB_SLOT_ORDER },
+  0: { base: YOGA_FB_BASE,  slots: YOGA_FB_SLOTS,  order: YOGA_FB_SLOT_ORDER, voice: true },
   1: { base: YOGA_HLB_BASE, slots: YOGA_HLB_SLOTS, order: YOGA_HLB_SLOT_ORDER, allSwitch: true }
 };
-function buildSlottedFlow(idx) {
+function buildSlottedFlow(idx, short) {
   var def = YOGA_SLOTTED[idx], out = [];
   def.base.forEach(function(p) {
+    if (short && !p.inShort) return;
     if (!p.slot) { out.push(p); return; }
     var s = def.slots[p.slot];
     if (!s) return;                                   // unknown slot: drop it, never crash
@@ -21759,7 +21770,7 @@ function buildSlottedFlow(idx) {
 }
 function buildFullBodyFlow() { return buildSlottedFlow(0); }
 function buildHipsFlow()     { return buildSlottedFlow(1); }
-function yogaFlowFor(idx)   { return YOGA_SLOTTED[idx] ? buildSlottedFlow(idx) : YOGA_FLOWS_TRAIN[idx]; }
+function yogaFlowFor(idx, short) { return YOGA_SLOTTED[idx] ? buildSlottedFlow(idx, short) : YOGA_FLOWS_TRAIN[idx]; }
 function yogaFlowTotal(flow){ return flow.reduce(function(a,p){ return a + p.dur; }, 0); }
 function yogaSlotFlowIdx(id) {
   for (var k in YOGA_SLOTTED) if (YOGA_SLOTTED[k].slots.hasOwnProperty(id)) return +k;
@@ -21787,10 +21798,77 @@ function setYogaVariantAll(idx, which) {
 }
 function yogaVariantRepaint(idx) {
   if (SS && SS.type === "yoga" && SS.yFlowIdx === idx) {
-    SS.yFlow = buildSlottedFlow(idx);
+    SS.yFlow = buildSlottedFlow(idx, SS.yShort);
     renderYogaSession();
   }
   if (document.getElementById("progGrid")) renderTrainPrograms();
+}
+
+// ── v509: short version + spoken cues ──────────────────────────────────────
+// Both prefs are device-local, like `fl4_yoga_variants`: not synced, not in
+// buildExportPayload, so not in the backup file or the test seed either.
+// `fl4_yoga_length` is {flowIdx: "short"}; anything that is not the exact
+// string "short" reads as FULL, so a corrupt value fails to the complete flow.
+// `fl4_yoga_voice` is "on"/"off"; unset = on (it was asked for as automatic).
+function yogaHasShort(idx) {
+  var def = YOGA_SLOTTED[idx];
+  return !!def && def.base.some(function(p){ return p.inShort; });
+}
+function yogaLengthOf(idx) {
+  var p = storeGet("fl4_yoga_length");
+  return (yogaHasShort(idx) && p && typeof p === "object" && p[idx] === "short") ? "short" : "full";
+}
+function setYogaLength(idx, which) {
+  if (!yogaHasShort(idx)) return;
+  var p = storeGet("fl4_yoga_length");
+  if (!p || typeof p !== "object") p = {};
+  p[idx] = (which === "short") ? "short" : "full";
+  storeSet("fl4_yoga_length", p);
+  if (SS && SS.type === "yoga" && SS.yFlowIdx === idx && SS.yPhase === "intro") SS.yShort = yogaLengthOf(idx) === "short";
+  yogaVariantRepaint(idx);
+}
+function yogaVoiceSupported() {
+  return typeof window.speechSynthesis !== "undefined" && typeof window.SpeechSynthesisUtterance !== "undefined";
+}
+function yogaHasVoice(idx) { return !!(YOGA_SLOTTED[idx] && YOGA_SLOTTED[idx].voice) && yogaVoiceSupported(); }
+function yogaVoiceOn()     { return storeGet("fl4_yoga_voice") !== "off"; }
+function setYogaVoice(which) {
+  storeSet("fl4_yoga_voice", which === "off" ? "off" : "on");
+  yogaSpeechStop();
+  if (SS && SS.type === "yoga") { SS.ySpokenFor = null; renderYogaSession(); }
+}
+function yogaSpeechStop() {
+  if (!yogaVoiceSupported()) return;
+  try { window.speechSynthesis.cancel(); } catch(e) {}
+}
+// Speaks the pose NAME then its short `cues` — never the Details paragraph.
+// All-caps emphasis ("FLAT", "BEHIND") is lowered so engines don't spell it.
+function yogaSpeechParts(pose) {
+  return [pose.name].concat(pose.cues || []).map(function(t){
+    return String(t).replace(/\b[A-Z]{2,}\b/g, function(w){ return w.toLowerCase(); }).replace(/\s*—\s*/g, ", ");
+  });
+}
+// Called at the end of every running/done render. The spoken pose is DERIVED
+// (`SS.ySpokenFor` vs the current pose), not triggered from each advance —
+// beginYoga, the timer, skip and back all move the index, and a fifth path
+// added later then speaks on its own (same reasoning as yogaPoseView).
+// One utterance per cue: Chrome cuts off single utterances past ~15s.
+function yogaSpeakIfDue() {
+  if (!SS || SS.type !== "yoga" || !yogaHasVoice(SS.yFlowIdx) || !yogaVoiceOn() || SS.yPaused) return;
+  var key = SS.yPhase === "done" ? "done" : (SS.yPhase === "running" ? "p" + SS.yPoseIdx : null);
+  if (!key || SS.ySpokenFor === key) return;
+  SS.ySpokenFor = key;
+  var parts = key === "done"
+    ? ["Practice complete.", "Before rising, roll to your right side first."]
+    : yogaSpeechParts(SS.yFlow[SS.yPoseIdx]);
+  try {
+    window.speechSynthesis.cancel();
+    parts.forEach(function(t){
+      var u = new SpeechSynthesisUtterance(t);
+      u.lang = "en-GB"; u.rate = 0.9;
+      window.speechSynthesis.speak(u);
+    });
+  } catch(e) {}
 }
 
 // Index 0 holds the flow built from the CURRENT choices; the session works from
@@ -22019,7 +22097,8 @@ function renderTrainPrograms() {
   var el = document.getElementById("progGrid");
   // Both flows' length and duration depend on the slot choices, so the cards are
   // built from the live flow rather than a hard-coded string that would rot.
-  var _fbFlow = buildFullBodyFlow(), _hlbFlow = buildHipsFlow();
+  var _fbShort = yogaLengthOf(0) === "short";
+  var _fbFlow = buildSlottedFlow(0, _fbShort), _hlbFlow = buildHipsFlow();
   var programs = [
     { type:"workout", key:"pull",  bg:"linear-gradient(135deg,#E8EFFA,#F0F5FC)", border:"#3b82f640", icon:"&#x1F535;", name:"Pull Day", desc:"Ring Rows · Split Squats · Assisted Pull-ups · Bridge", descColor:"#2A5AB0" },
     { type:"workout", key:"push",  bg:"linear-gradient(135deg,#FBEAEA,#FCF2F2)", border:"#ef444430", icon:"&#x1F534;", name:"Push Day", desc:"Bench Dips · Single-leg DL · Push-ups · Side Plank", descColor:"#B03030" },
@@ -22028,7 +22107,7 @@ function renderTrainPrograms() {
     { type:"workout", key:"pushb", bg:"linear-gradient(135deg,#FDEFE3,#FEF6EE)", border:"#f9731640", icon:"&#x1F534;", name:"Beginner Push Day", tag:"Fitness", desc:"Incline Push-ups · Romanian DL · Bench Dips · Side Plank", descColor:"#B0500A" },
     // v482: the only card whose desc reads saved progress — it is the one programme that keeps any.
     { type:"pullup",  key:0,       bg:"linear-gradient(135deg,#E8EFFA,#F0F5FC)", border:"#3b82f640", icon:"&#x1F4AA;", name:"Pull-up Plan", tag:"Fitness", desc:pullupSessionsDone(pullupState())+" of "+pullupTotalSessions()+" sessions · 4 weeks", descColor:"#2A5AB0" },
-    { type:"yoga",    key:0,       bg:"linear-gradient(135deg,#EAE4F8,#F2EDFB)", border:"#8b5cf650", icon:"&#x1F9D8;", name:"Full Body Flow", tag:"Physio", desc:_fbFlow.length+" poses · ~"+Math.round(yogaFlowTotal(_fbFlow)/60)+" min · your version", descColor:"#6A3CB0" },
+    { type:"yoga",    key:0,       bg:"linear-gradient(135deg,#EAE4F8,#F2EDFB)", border:"#8b5cf650", icon:"&#x1F9D8;", name:"Full Body Flow", tag:"Physio", desc:_fbFlow.length+" poses · ~"+Math.round(yogaFlowTotal(_fbFlow)/60)+" min · "+(_fbShort?"short":"your version"), descColor:"#6A3CB0" },
     { type:"yoga",    key:1,       bg:"linear-gradient(135deg,#F0EAFA,#F6F2FC)", border:"#8b5cf630", icon:"&#x1F9D8;", name:"Hips &amp; Lower Back", tag:"Physio", desc:_hlbFlow.length+" poses · ~"+Math.round(yogaFlowTotal(_hlbFlow)/60)+" min · your version", descColor:"#6A3CB0" },
     { type:"physio",  key:0,       bg:"linear-gradient(135deg,#E2F4F1,#EFFAF8)", border:"#14b8a630", icon:"&#x1FAB4;", name:"Nerve &amp; Hip", tag:"Physio", desc:"7 exercises · nerve mobility", descColor:"#0A8070" },
     { type:"physio",  key:1,       bg:"linear-gradient(135deg,#E2F4F1,#EFFAF8)", border:"#14b8a630", icon:"&#x1F9B5;", name:"Lower Limb", tag:"Fitness", desc:"15 exercises · glutes · quad · calf", descColor:"#0A8070" },
@@ -22078,6 +22157,7 @@ function openSessionOverlay(title) {
 }
 function closeSessionOverlay() {
   clearST();
+  yogaSpeechStop();
   document.getElementById("sessionOverlay").style.display = "none";
   document.body.style.overflow = "";
   // Refresh home dashboard if visible
@@ -22133,7 +22213,9 @@ function openYogaSession(flowIdx) {
   // Built ONCE per session and read from SS from here on. Flow 0's length and
   // duration depend on the slot choices, so nothing downstream may go back to
   // YOGA_FLOWS_TRAIN[0] — it is only the at-load snapshot.
-  SS.yFlow = yogaFlowFor(flowIdx);
+  // v509: the length is read ONCE here too — a session runs at the length it began at.
+  SS.yShort = yogaLengthOf(flowIdx) === "short";
+  SS.yFlow = yogaFlowFor(flowIdx, SS.yShort);
   openSessionOverlay(YOGA_TRAIN_NAMES[flowIdx]);
   document.getElementById("sesProgFill").style.background = "#8b5cf6";
   renderYogaSession();
@@ -22159,6 +22241,7 @@ function renderYogaSession() {
       "<div class='ses-intro-name'>"+esc(YOGA_TRAIN_NAMES[SS.yFlowIdx])+"</div>" +
       "<div class='ses-intro-sub'>"+flow.length+" poses &middot; ~"+Math.round(yogaFlowTotal(SS.yFlow)/60)+" min</div>" +
       (YOGA_TRAIN_NOTES[SS.yFlowIdx] ? "<div style='width:100%;max-width:320px;background:#FCEFD6;border:1px solid #E2B867;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14px;color:#3E2A06;line-height:1.55;text-align:left'>&#x26A0;&#xFE0F; "+esc(YOGA_TRAIN_NOTES[SS.yFlowIdx])+"</div>" : "") +
+      yogaSessionOptsHtml() +
       yogaVariantPickerHtml() +
       "<div style='width:100%;max-width:320px;background:#fff;border:1px solid #E0DCD4;border-radius:12px;padding:12px 14px;margin-bottom:28px;text-align:left'>"+exList+"</div>" +
       "<button class='ses-begin-btn' style='background:#8b5cf6' onclick='beginYoga()'>Begin practice</button>" +
@@ -22176,6 +22259,7 @@ function renderYogaSession() {
       "<button class='ses-done-btn' onclick='finishYoga()'>Save &amp; finish</button>" +
       "<button class='ses-done-link' onclick='openYogaSession(SS.yFlowIdx)'>Do it again</button>" +
     "</div>";
+    yogaSpeakIfDue();
     return;
   }
 
@@ -22197,7 +22281,37 @@ function renderYogaSession() {
       "<button class='ses-ctrl-btn' data-action='toggleYogaPause'>"+(SS.yPaused?"Resume":"Pause")+"</button>" +
       "<button class='ses-ctrl-btn' data-action='skipYogaPose'>Skip &#x276F;</button>" +
     "</div>" +
+    (yogaHasVoice(SS.yFlowIdx)
+      ? "<button class='ses-voice-btn' aria-pressed='"+(yogaVoiceOn()?"true":"false")+"' onclick=\"setYogaVoice('"+(yogaVoiceOn()?"off":"on")+"')\">"+(yogaVoiceOn()?"&#x1F50A; Voice on":"&#x1F507; Voice off")+"</button>"
+      : "") +
     "<button class='ses-exit-link' onclick=\"confirmDialog('Exit practice?',function(){closeSessionOverlay()})\">Exit practice</button>";
+  yogaSpeakIfDue();
+}
+
+// v509: Length and Voice rows on the intro, in the same switch style as the
+// pose picker. Each row appears only where the flow offers it (Full Body).
+function yogaSessionOptsHtml() {
+  var idx = SS.yFlowIdx, rows = "";
+  function btn(on, label, aria, click) {
+    return "<button class='yv-btn" + (on ? " on" : "") + "' aria-pressed='" + (on ? "true" : "false") + "'" +
+      " aria-label='" + aria + "' onclick=\"" + click + "\">" + label + "</button>";
+  }
+  if (yogaHasShort(idx)) {
+    var full = buildSlottedFlow(idx, false), sh = buildSlottedFlow(idx, true);
+    rows += "<div class='yv-row'><div class='yv-lab'>Length</div><div class='yv-btns'>" +
+      btn(!SS.yShort, "Full &middot; "+Math.round(yogaFlowTotal(full)/60)+" min", "Length: full", "setYogaLength("+idx+",'full')") +
+      btn(SS.yShort,  "Short &middot; "+Math.round(yogaFlowTotal(sh)/60)+" min", "Length: short", "setYogaLength("+idx+",'short')") +
+    "</div></div>";
+  }
+  if (yogaHasVoice(idx)) {
+    var on = yogaVoiceOn();
+    rows += "<div class='yv-row'><div class='yv-lab'>Spoken cues</div><div class='yv-btns'>" +
+      btn(on,  "On",  "Spoken cues: on",  "setYogaVoice('on')") +
+      btn(!on, "Off", "Spoken cues: off", "setYogaVoice('off')") +
+    "</div></div>";
+  }
+  if (!rows) return "";
+  return "<div class='yv-wrap'><div class='yv-hdr'>Session &middot; remembered</div>" + rows + "</div>";
 }
 
 // The per-pose switches, shown on the intro of each slotted flow (Full Body,
@@ -22322,7 +22436,8 @@ function startYogaTimer() {
 }
 function toggleYogaPause() {
   SS.yPaused = !SS.yPaused;
-  if (SS.yPaused) { clearST(); }
+  // v509: pausing silences the voice; resuming reads the current pose again.
+  if (SS.yPaused) { clearST(); yogaSpeechStop(); SS.ySpokenFor = null; }
   else { startYogaTimer(); }
   renderYogaSession();
 }
@@ -22591,7 +22706,7 @@ function finishYoga() {
   var flow = SS.yFlow;
   var _yMins = flow.reduce(function(s,p){ return s + (p.dur||0); }, 0) / 60;
   var entry = { id:Date.now(), ts:Date.now(), date:trainTodayStr(), type:'yoga',
-    sessionName:YOGA_TRAIN_NAMES[SS.yFlowIdx].replace(/&amp;/g,"&"), poses:flow.length,
+    sessionName:YOGA_TRAIN_NAMES[SS.yFlowIdx].replace(/&amp;/g,"&") + (SS.yShort ? " (short)" : ""), poses:flow.length,
     kcal:estimateSessionKcal(2.8, _yMins), exercises:[] };
   saveSession(entry);
   var al = getActionLog(); al.unshift(Object.assign({},entry)); storeSet("fl4_action_log", al);
