@@ -47,8 +47,8 @@ attempt the rest, then report.
 - Read the `VERSION` constant in `sw.js` (single source of truth),
   e.g. `v308 · 03/07/2026`.
 - Confirm `index.html` contains the same version string.
-- Read the top entry of `HEARTH-changelog.md` and the "Current version" line
-  in `HEARTH-notes.md`, and report both. Flag any mismatch against sw.js —
+- Read the top entry of `docs/HEARTH-changelog.md` and the "Current version" line
+  in `docs/HEARTH-notes.md`, and report both. Flag any mismatch against sw.js —
   it means the last session didn't sync the docs, and the main session
   should be told before starting.
 - State the NEXT version number (current NNN + 1) for this change.
