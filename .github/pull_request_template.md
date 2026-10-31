@@ -1,4 +1,4 @@
-👉 **Try this version:** https://raw.githack.com/coshea321/miniature-journey/BRANCH-NAME/index.html
+👉 **Try this version:** https://raw.githack.com/coshea321/hearth/BRANCH-NAME/index.html
 
 ## What changed
 

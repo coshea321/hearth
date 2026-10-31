@@ -53,7 +53,7 @@ continuing:
      this branch (v324 test mode: sync/login blocked, data sandboxed;
      v407 demo data: the link opens with a fixed sample household already
      in it, reloaded fresh for every version):
-     `https://raw.githack.com/coshea321/miniature-journey/<branch>/index.html`
+     `https://raw.githack.com/coshea321/hearth/<branch>/index.html`
    - **What changed** — plain-English bullets a non-coder can review.
    - **Why** — the request or bug that prompted it.
    - **Before you merge** — the pre-merge checklist (v407). Copy the
