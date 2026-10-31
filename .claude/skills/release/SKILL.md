@@ -26,15 +26,15 @@ continuing:
 2. **Bump both files.** Edit the one-line `VERSION` constant in `sw.js` and
    the `appVersionLabel` div in `index.html` to the same new string.
 3. **Update the docs (three files).**
-   - `HEARTH-changelog.md` — new entry at the top, **capped at ~150 words**
+   - `docs/HEARTH-changelog.md` — new entry at the top, **capped at ~150 words**
      plus a headline sentence and every "do NOT simplify this into X"
      warning (those are exempt from the cap). The full reasoning goes in the
      PR body, not here. Keep the newest ~10 entries; move the oldest surplus
-     to `HEARTH-archive.md`.
-   - `HEARTH-notes.md` — the "Current version" line, plus any
+     to `docs/HEARTH-archive.md`.
+   - `docs/HEARTH-notes.md` — the "Current version" line, plus any
      architecture/quirk/storage change. If the version didn't change how the
      app works, this file may not need touching.
-   - `HEARTH-backlog.md` — strike through what this closed, add what it
+   - `docs/HEARTH-backlog.md` — strike through what this closed, add what it
      opened.
 4. **Run `tests/checks.sh` and `node tests/run.js`** — expect exit 0 from
    both — then grep-confirm the strings you edited actually landed. Any
