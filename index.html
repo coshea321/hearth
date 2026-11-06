@@ -6282,7 +6282,9 @@ function projectSearchText(p) {
 // the ungrouped bucket (label "") first, then groups by earliest `added`.
 function projGroupKey(it) { return String((it && it.group) || "").trim().toLowerCase(); }
 function projItemGroups(items) {
-  var byKey = {}, order = [];
+  // Prototype-free: a group typed as "constructor" or "__proto__" must be a
+  // bucket like any other, not an inherited property (PR #284 review).
+  var byKey = Object.create(null), order = [];
   items.slice().sort(function(a, b){ return (a.added || 0) - (b.added || 0); }).forEach(function(it){
     var k = projGroupKey(it);
     if (!byKey[k]) { byKey[k] = { label: k ? String(it.group).trim() : "", items: [] }; if (k) order.push(k); }

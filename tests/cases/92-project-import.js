@@ -62,6 +62,8 @@ module.exports = {
       var g = projItemGroups(np.items);
       ok('"Part A" and "part a " are one group, then Part B', g.map(function(x){ return x.label; }).join('|') === 'Part A|Part B', g.map(function(x){ return x.label; }).join('|'));
       ok('Part A holds its three tasks and its link', g[0].items.length === 4);
+      var odd = projItemGroups([ { group:'constructor', added:1 }, { group:'__proto__', added:2 }, { group:'toString', added:3 } ]);
+      ok('a group named like a built-in property is still a group', odd.map(function(x){ return x.label + ':' + x.items.length; }).join('|') === 'constructor:1|__proto__:1|toString:1', JSON.stringify(odd));
       ok('search finds an item by its group', projectSearchText(np).indexOf('part b') !== -1);
 
       switchSection('projects');
