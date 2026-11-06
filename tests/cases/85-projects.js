@@ -1,7 +1,7 @@
 'use strict';
 
 // Projects (v499). The parts a bug would make quiet rather than loud: the
-// two-level sync merge (a tick on one phone must not undo a quote added on
+// two-level sync merge (a tick on one phone must not undo an item added on
 // the other), Firebase's missing/object-shaped `items`, item tombstones, the
 // one-way To-do copy, the Home line's status filter, the backup round trip,
 // the link gate at render, and the section being reachable at all.
@@ -90,10 +90,18 @@ module.exports = {
       storeSet('fl4_projects', [ { id:1, name:'K', status:'active', updated:1, items:[ item(11, 'task', 'x', { done:true }) ] } ]);
       ok('no open tasks, no line', projHomeSummary() === null);
 
-      // ── Cost roll-up ─────────────────────────────────────────────────────
-      var costP = { items:[ item(1, 'cost', 'a', { amount:42.5 }), item(2, 'cost', 'b', { amount:300 }), item(3, 'cost', 'c', { amount:'' }), item(4, 'quote', 'q', { amount:999 }) ] };
-      ok('spent totals the costs only, skipping a blank amount', projSpent(costP) === 342.5, 'got ' + projSpent(costP));
-      ok('no priced cost reads as null, not 0', projSpent({ items:[ item(1, 'cost', 'a') ] }) === null);
+      // ── Retired types (v512) ─────────────────────────────────────────────
+      // Quote, Cost and Contact were retired: kept in the data, never shown,
+      // counted or searched — and never mistaken for tasks.
+      var oldP = { id:1, name:'Old', status:'active', updated:1,
+                   items:[ item(1, 'cost', 'Paid zz85r', { amount:42.5 }), item(2, 'quote', 'Quoted zz85r'), item(3, 'contact', 'Joiner zz85r'), item(4, 'task', 'Real task') ] };
+      ok('a retired type is not shown', !projItemShown(oldP.items[0]) && !projItemShown(oldP.items[1]) && !projItemShown(oldP.items[2]) && projItemShown(oldP.items[3]));
+      ok('a retired type is not counted as a task', projTaskCounts(oldP).open === 1, JSON.stringify(projTaskCounts(oldP)));
+      ok('a retired type is not searched', projectSearchText(oldP).indexOf('zz85r') === -1);
+      ok('an unknown type still reads as a task', projItemTypeMeta('mystery').key === 'task');
+      ok('only Task and Link can be added', PROJ_ITEM_TYPES.map(function(t){ return t.key; }).join('|') === 'task|link');
+      var mr = mergeProjectsData([oldP], [JSON.parse(JSON.stringify(oldP))], {}, {});
+      ok('the merge keeps retired items in the data', mr.projects[0].items.length === 4);
 
       // ── One-way copy to To-do ────────────────────────────────────────────
       storeSet('fl4_projects', [ { id:1, name:'Kitchen', status:'active', updated:1, items:[ item(11, 'task', 'Book the electrician zz85', { date:day(4) }) ] } ]);

@@ -904,7 +904,7 @@ li.rcp-done.rcp-ing{text-decoration:line-through}
   <div class="hdr-act" data-sec="watch"><button class="hdr-btn hdr-add" id="watchNewBtn" aria-label="Add to watchlist" title="Add to watchlist">+</button><button class="hdr-btn hdr-more" data-tools="watch" aria-label="More watchlist actions" title="More">&#x22EF;</button></div>
   <div class="hdr-act" data-sec="appliances"><button class="hdr-btn hdr-add" id="applNewBtn" aria-label="New inventory item" title="New inventory item">+</button></div>
   <div class="hdr-act" data-sec="health"><button class="hdr-btn hdr-add" id="hlNewBtn" aria-label="New medical record" title="New medical record">+</button></div>
-  <div class="hdr-act" data-sec="projects"><button class="hdr-btn hdr-add" id="projNewBtn" aria-label="New project" title="New project">+</button></div>
+  <div class="hdr-act" data-sec="projects"><button class="hdr-btn hdr-add" id="projNewBtn" aria-label="New project" title="New project">+</button><button class="hdr-btn hdr-more" data-tools="projects" aria-label="More project actions" title="More">&#x22EF;</button></div>
   <div class="hdr-act" data-sec="golf"><button class="hdr-btn hdr-add" id="golfNewBtn" aria-label="New golf round" title="New golf round">+</button><button class="hdr-btn hdr-more" data-tools="golf" aria-label="More golf actions" title="More">&#x22EF;</button></div>
   <div class="hdr-act" data-sec="track"><label class="hdr-person">&#x1F464;<select id="trackPerson" aria-label="Recording for"><option value="me">Me</option><option value="wife">My wife</option><option value="daughter">My daughter</option></select></label></div>
   <button class="hdr-btn" id="syncBtn" title="Sync" aria-label="Open sync settings">&#128257;<span class="sync-dot" id="syncDot"></span></button>
@@ -918,6 +918,7 @@ li.rcp-done.rcp-ing{text-decoration:line-through}
     <div class="sec-tools" data-sec="recipes"><button id="recipeImportBtn" class="more-row"><span class="more-ico">&#x2B07;</span><span class="more-name">Import a recipe</span></button></div>
     <div class="sec-tools" data-sec="trips"><button id="tripPackingBtn" class="more-row"><span class="more-ico">&#x2708;&#xFE0F;</span><span class="more-name">Packing list</span></button><button id="tripImportBtn" class="more-row"><span class="more-ico">&#x1F4E5;</span><span class="more-name">Import a trip</span></button></div>
     <div class="sec-tools" data-sec="plants"><button id="plantImportBtn" class="more-row"><span class="more-ico">&#x1F4E5;</span><span class="more-name">Import a plant</span></button></div>
+    <div class="sec-tools" data-sec="projects"><button id="projImportBtn" class="more-row"><span class="more-ico">&#x1F4E5;</span><span class="more-name">Import a plan</span></button></div>
     <div class="sec-tools" data-sec="golf"><button id="golfImportBtn" class="more-row"><span class="more-ico">&#x1F4E5;</span><span class="more-name">Import a course</span></button></div>
     <div class="sec-tools" data-sec="watch"><button id="watchRandomBtn" class="more-row"><span class="more-ico">&#x1F3B2;</span><span class="more-name">Pick something at random</span></button></div>
   </div>
@@ -1072,7 +1073,7 @@ li.rcp-done.rcp-ing{text-decoration:line-through}
     </div>
     <div class="home-week-strip" id="homeWeekStrip"></div>
 
-    <div style="text-align:center;margin-top:20px;font-size:11px;color:#C8BEA8;font-weight:600;letter-spacing:.4px" id="appVersionLabel">v510 · 24/10/2026</div>
+    <div style="text-align:center;margin-top:20px;font-size:11px;color:#C8BEA8;font-weight:600;letter-spacing:.4px" id="appVersionLabel">v512 · 06/11/2026</div>
 
   </div>
 </div>
@@ -6123,15 +6124,21 @@ function projStatusPill(k) {
 
 var PROJ_ITEM_TYPES = [
   { key:"task",    label:"Task",    plural:"Tasks",    ico:"&#x2611;&#xFE0F;" },
-  { key:"quote",   label:"Quote",   plural:"Quotes",   ico:"&#x1F4C4;" },
-  { key:"cost",    label:"Cost",    plural:"Costs",    ico:"&#x1F4B6;" },
-  { key:"contact", label:"Contact", plural:"Contacts", ico:"&#x1F477;" },
   { key:"link",    label:"Link",    plural:"Links",    ico:"&#x1F517;" }
 ];
+// v512 (Cathal, 06/11/2026): Quote, Cost and Contact were retired — that
+// detail goes in the notes now. Items of those types already saved are KEPT
+// in the data (sync, merge and backup carry them untouched) but are never
+// shown, counted or searched. Do NOT let them fall through to the "unknown
+// reads as a task" default below: they would reappear as tasks.
+var PROJ_RETIRED_ITEM_TYPES = { quote:true, cost:true, contact:true };
+var PROJ_RETIRED_META = { key:"retired", label:"Item", plural:"Items", ico:"" };
 function projItemTypeMeta(k) {
   for (var i = 0; i < PROJ_ITEM_TYPES.length; i++) if (PROJ_ITEM_TYPES[i].key === k) return PROJ_ITEM_TYPES[i];
+  if (PROJ_RETIRED_ITEM_TYPES[k] === true) return PROJ_RETIRED_META;
   return PROJ_ITEM_TYPES[0];
 }
+function projItemShown(it) { return !!it && projItemTypeMeta(it.type).key !== "retired"; }
 // What each item type ASKS FOR and what the shared fields are CALLED — the
 // HEALTH_KIND_FIELDS pattern. "" / false means the field isn't shown for
 // that type. Every item STORES every field whatever its type ("" or false,
@@ -6139,12 +6146,9 @@ function projItemTypeMeta(k) {
 // cleared field from the other phone.
 var PROJ_ITEM_FIELDS = {
   task:    { title:"Task",               date:"Due",     amount:"",       who:"",              phone:false, url:""                  },
-  quote:   { title:"What it&rsquo;s for", date:"Date",   amount:"Quoted", who:"From",          phone:true,  url:"Link to the quote" },
-  cost:    { title:"What",               date:"Paid on", amount:"Amount", who:"Paid to",       phone:false, url:""                  },
-  contact: { title:"Name",               date:"",        amount:"",       who:"Trade or role", phone:true,  url:"Website"           },
   link:    { title:"Label",              date:"",        amount:"",       who:"",              phone:false, url:"Web address"       }
 };
-function projItemFields(type) { return PROJ_ITEM_FIELDS[projItemTypeMeta(type).key]; }
+function projItemFields(type) { return PROJ_ITEM_FIELDS[projItemTypeMeta(type).key] || PROJ_ITEM_FIELDS.task; }
 
 // The read boundary. Accepts Firebase's shapes: a missing key (an empty
 // array it refused to store) and an object keyed "0","1",… (a sparse array).
@@ -6251,15 +6255,6 @@ function projTaskCounts(p) {
 // A missing, blank or junk amount is skipped rather than read as 0 —
 // applianceValueNum draws exactly that line for the inventory totals.
 function projItemAmount(it) { return applianceValueNum({ value: it && it.amount }); }
-function projSpent(p) {
-  var total = 0, any = false;
-  projItemsOf(p).forEach(function(it){
-    if (projItemTypeMeta(it.type).key !== "cost") return;
-    var n = projItemAmount(it);
-    if (n !== null) { total += n; any = true; }
-  });
-  return any ? Math.round(total * 100) / 100 : null;
-}
 // The Home line's numbers, across Planning + In progress projects only.
 // null when nothing is open, so the line self-suppresses like every other
 // Today row. `onlyId` is the project to deep-link to when every open task
@@ -6279,8 +6274,25 @@ function projHomeSummary() {
 function projectSearchText(p) {
   if (!p) return "";
   var parts = [p.name, p.notes, projStatusMeta(p.status).label];
-  projItemsOf(p).forEach(function(it){ parts.push(it.title, it.who, it.notes); });
+  projItemsOf(p).forEach(function(it){ if (projItemShown(it)) parts.push(it.title, it.who, it.notes, it.group); });
   return parts.join(" ").toLowerCase();
+}
+// v512: an item's group is free text; "Part A" and "part a " are one group
+// (shown with the spelling of its earliest item). Returns [{label, items}],
+// the ungrouped bucket (label "") first, then groups by earliest `added`.
+function projGroupKey(it) { return String((it && it.group) || "").trim().toLowerCase(); }
+function projItemGroups(items) {
+  // Prototype-free: a group typed as "constructor" or "__proto__" must be a
+  // bucket like any other, not an inherited property (PR #284 review).
+  var byKey = Object.create(null), order = [];
+  items.slice().sort(function(a, b){ return (a.added || 0) - (b.added || 0); }).forEach(function(it){
+    var k = projGroupKey(it);
+    if (!byKey[k]) { byKey[k] = { label: k ? String(it.group).trim() : "", items: [] }; if (k) order.push(k); }
+    byKey[k].items.push(it);
+  });
+  var out = byKey[""] ? [byKey[""]] : [];
+  order.forEach(function(k){ out.push(byKey[k]); });
+  return out;
 }
 function projDateText(v) {
   var s = String(v || "");
@@ -6357,7 +6369,8 @@ function projToggleTask(projId, itemId) {
 }
 
 // ── UI state ─────────────────────────────────────────────────────────────
-var _projView      = "list";   // "list" | "detail" | "editor" | "item"
+var _projView      = "list";   // "list" | "detail" | "editor" | "item" | "import"
+var _projImportParsed = null;  // import step 2: the parsed plan, null on step 1 (v512)
 var _projOpenId    = null;     // project shown in detail (and the parent of an item being edited)
 var _projEditId    = null;     // project editor: id being edited, null = new
 var _projItemId    = null;     // item editor: id being edited, null = new
@@ -6379,6 +6392,7 @@ function renderProjects() {
   if (_projView === "editor") { renderProjectEditor(); return; }
   if (_projView === "item")   { renderProjectItemEditor(); return; }
   if (_projView === "detail") { renderProjectDetail(); return; }
+  if (_projView === "import") { renderProjectImport(); return; }
   _projView = "list";
   var el = document.getElementById("projectsContent");
   if (!el) return;
@@ -6387,7 +6401,7 @@ function renderProjects() {
     el.innerHTML = "<div style='text-align:center;color:#7A6A55;padding:40px 20px'>" +
       "<div style='font-size:40px;margin-bottom:10px'>&#x1F528;</div>" +
       "<div style='font-size:16px;font-weight:600;margin-bottom:4px;color:#2A2010'>No projects yet</div>" +
-      "<div style='font-size:13px;line-height:1.55'>Renovations, DIY and household admin &mdash; each with its own tasks, quotes, costs, contacts and links. Tap + to start one.</div></div>";
+      "<div style='font-size:13px;line-height:1.55'>Renovations, DIY and household admin &mdash; each with its own tasks and links. Tap + to start one, or import a plan from the &#x22EF; menu.</div></div>";
     return;
   }
   var html = "";
@@ -6423,11 +6437,9 @@ function projListSort(a, b) {
 }
 function projCardHTML(p) {
   var c = projTaskCounts(p);
-  var spent = projSpent(p);
   var sub = [];
   if (p.target) sub.push("Target " + projDateText(p.target));
   if (c.open || c.done) sub.push(c.done + " of " + (c.open + c.done) + " tasks done");
-  if (spent !== null) sub.push(applianceMoney(spent) + " spent");
   return "<div class='proj-card' data-pid='" + esc(String(p.id)) + "' style='background:#fff;border:1.5px solid #EDE3D5;border-radius:12px;margin-bottom:8px;padding:12px;cursor:pointer;touch-action:manipulation'>" +
     "<div style='display:flex;align-items:center;gap:8px'>" +
       "<div style='flex:1;min-width:0;font-size:15px;font-weight:600;color:#2A2010;line-height:1.3'>" + esc(p.name || "Untitled project") + "</div>" +
@@ -6477,7 +6489,6 @@ function renderProjectDetail() {
   // Deleted on the other phone, or a stale deep link — fall back to the list.
   if (!p) { _projView = "list"; _projOpenId = null; renderProjects(); return; }
   var c = projTaskCounts(p);
-  var spent = projSpent(p);
   var html = "<button id='projBack' style='border:none;background:none;color:" + PROJ_COLOR + ";font-family:inherit;font-size:14px;font-weight:700;padding:6px 2px 10px;cursor:pointer;touch-action:manipulation'>&#x2039; All projects</button>";
   html += "<div style='background:#fff;border:1.5px solid #EDE3D5;border-radius:14px;padding:14px;margin-bottom:6px'>" +
     "<div style='display:flex;align-items:flex-start;gap:8px'>" +
@@ -6487,7 +6498,6 @@ function renderProjectDetail() {
   var facts = [];
   if (p.target) facts.push("Target " + projDateText(p.target));
   if (c.open || c.done) facts.push(c.done + " of " + (c.open + c.done) + " tasks done" + (c.overdue ? " &middot; <b style='color:#B03030'>" + c.overdue + " overdue</b>" : ""));
-  if (spent !== null) facts.push("<b>" + applianceMoney(spent) + "</b> spent");
   if (facts.length) html += "<div style='font-size:13px;color:#6E5E48;margin-top:6px;line-height:1.6'>" + facts.join("<br>") + "</div>";
   if (p.notes) html += "<div style='font-size:14px;color:#2A2010;line-height:1.55;white-space:pre-wrap;margin-top:10px'>" + esc(p.notes) + "</div>";
   html += "<div style='display:flex;gap:8px;margin-top:12px'>" +
@@ -6503,28 +6513,38 @@ function renderProjectDetail() {
   });
   html += "</div>";
 
-  PROJ_ITEM_TYPES.forEach(function(ty){
-    var items = p.items.filter(function(it){ return projItemTypeMeta(it.type).key === ty.key; });
-    if (!items.length) return;
-    if (ty.key === "task") {
-      // Open first, soonest due first (undated after the dated); done ones last.
-      items.sort(function(a, b){
-        if (!!a.done !== !!b.done) return a.done ? 1 : -1;
-        var da = String(a.date || ""), db = String(b.date || "");
-        if (da && db && da !== db) return da.localeCompare(db);
-        if (da && !db) return -1;
-        if (!da && db) return 1;
-        return (a.added || 0) - (b.added || 0);
-      });
-    } else if (ty.key === "cost" || ty.key === "quote") {
-      items.sort(function(a, b){ return String(b.date || "").localeCompare(String(a.date || "")); });
-    } else {
-      items.sort(function(a, b){ return String(a.title || "").localeCompare(String(b.title || "")); });
+  // v512: groups. Ungrouped items come first, under their type headers
+  // exactly as before groups existed; then each named group, in the order
+  // its first item was added (so an imported plan keeps its own order),
+  // with its tasks then its links.
+  projItemGroups(p.items.filter(projItemShown)).forEach(function(g){
+    if (g.label) {
+      var gc = { open:0, done:0 };
+      g.items.forEach(function(it){ if (projItemTypeMeta(it.type).key === "task") { if (it.done) gc.done++; else gc.open++; } });
+      html += projGroupHeader("&#x1F4C2; " + esc(g.label) + " &middot; " +
+        (gc.open + gc.done ? gc.done + " of " + (gc.open + gc.done) + " done" : g.items.length));
     }
-    var head = ty.ico + " " + ty.plural + " &middot; " + items.length;
-    if (ty.key === "cost" && spent !== null) head += " &middot; " + applianceMoney(spent);
-    html += projGroupHeader(head);
-    items.forEach(function(it){ html += projItemRowHTML(p, it); });
+    PROJ_ITEM_TYPES.forEach(function(ty){
+      var items = g.items.filter(function(it){ return projItemTypeMeta(it.type).key === ty.key; });
+      if (!items.length) return;
+      if (ty.key === "task") {
+        // Open first, soonest due first (undated after the dated); done ones last.
+        items.sort(function(a, b){
+          if (!!a.done !== !!b.done) return a.done ? 1 : -1;
+          var da = String(a.date || ""), db = String(b.date || "");
+          if (da && db && da !== db) return da.localeCompare(db);
+          if (da && !db) return -1;
+          if (!da && db) return 1;
+          return (a.added || 0) - (b.added || 0);
+        });
+      } else if (g.label) {
+        items.sort(function(a, b){ return (a.added || 0) - (b.added || 0); });
+      } else {
+        items.sort(function(a, b){ return String(a.title || "").localeCompare(String(b.title || "")); });
+      }
+      if (!g.label) html += projGroupHeader(ty.ico + " " + ty.plural + " &middot; " + items.length);
+      items.forEach(function(it){ html += projItemRowHTML(p, it); });
+    });
   });
   el.innerHTML = html;
 
@@ -6671,12 +6691,14 @@ function renderProjectItemEditor() {
     it = projFind(p.items, _projItemId);
     // Deleted on the other phone while the editor was open — back to the
     // project rather than saving a resurrected copy.
-    if (!it) { _projView = "detail"; _projItemId = null; renderProjects(); return; }
+    // A retired type (v512) is never shown, so this is only a stale handle.
+    if (!it || !projItemShown(it)) { _projView = "detail"; _projItemId = null; renderProjects(); return; }
     _projItemType = projItemTypeMeta(it.type).key;
   }
   var type = projItemTypeMeta(_projItemType).key;
+  if (type === "retired") type = "task";
   var meta = projItemTypeMeta(type);
-  var f = PROJ_ITEM_FIELDS[type];
+  var f = projItemFields(type);
   _projEditing = true;
   function leave() {
     _projEditing = false; _projCancelFn = null;
@@ -6693,6 +6715,12 @@ function renderProjectItemEditor() {
   if (f.date)   html += projDateFieldHTML("projItDate", f.date, it && it.date);
   if (f.phone)  html += "<div style='" + PROJ_LBL + ";margin-top:14px'>Phone " + PROJ_OPT + "</div><input id='projItPhone' type='tel' inputmode='tel' placeholder='e.g. 087 123 4567' style='" + PROJ_INP + "' value='" + v("phone") + "'>";
   if (f.url)    html += "<div style='" + PROJ_LBL + ";margin-top:14px'>" + f.url + (type === "link" ? "" : " " + PROJ_OPT) + "</div><input id='projItUrl' type='url' inputmode='url' placeholder='https://&hellip;' style='" + PROJ_INP + "' value='" + v("url") + "'>";
+  // v512: the group — free text, offered the project's existing groups.
+  var groupOpts = projItemGroups(p.items.filter(projItemShown)).filter(function(g){ return g.label; })
+    .map(function(g){ return "<option value='" + esc(g.label) + "'></option>"; }).join("");
+  html += "<div style='" + PROJ_LBL + ";margin-top:14px'>Group " + PROJ_OPT + "</div>" +
+    "<input id='projItGroup' type='text' list='projItGroupList' autocomplete='off' placeholder='e.g. Part A &mdash; passport' style='" + PROJ_INP + "' value='" + v("group") + "'>" +
+    "<datalist id='projItGroupList'>" + groupOpts + "</datalist>";
   html += "<div style='" + PROJ_LBL + ";margin-top:14px'>Notes " + PROJ_OPT + "</div>" +
     "<textarea id='projItNotes' rows='3' style='" + PROJ_INP + ";resize:vertical'>" + v("notes") + "</textarea>";
   if (type === "task" && it && !it.done) {
@@ -6720,7 +6748,7 @@ function renderProjectItemEditor() {
   });
   document.getElementById("projEdSave").addEventListener("click", function(){
     var title = val("projItTitle").trim();
-    if (!title) { toast("Give it a " + (type === "contact" ? "name" : "title") + " first"); return; }
+    if (!title) { toast("Give it a title first"); return; }
     var amount = "";
     if (f.amount) {
       var parsed = applianceParseValue(val("projItAmount"));
@@ -6738,7 +6766,7 @@ function renderProjectItemEditor() {
     // Every field stored whatever the type ("" / false, never a dropped key —
     // the v296 rule). A field this type doesn't show keeps its old value, so
     // nothing typed is ever destroyed by a field being hidden.
-    var vals = { type: type, title: title, notes: val("projItNotes") };
+    var vals = { type: type, title: title, notes: val("projItNotes"), group: val("projItGroup").trim() };
     if (f.who)    vals.who = val("projItWho").trim();
     if (f.amount) vals.amount = amount;
     if (f.date)   vals.date = val("projItDate").trim();
@@ -6754,7 +6782,7 @@ function renderProjectItemEditor() {
       cur.updated = now;                               // the ITEM only
     } else {
       var fresh = { id: projNewId(), type: type, title: "", date: "", amount: "", who: "", phone: "", url: "",
-                    notes: "", done: false, sentAt: 0, addedBy: hearthUser, added: now, updated: now };
+                    notes: "", group: "", done: false, sentAt: 0, addedBy: hearthUser, added: now, updated: now };
       Object.keys(vals).forEach(function(k){ fresh[k] = vals[k]; });
       pp.items.push(fresh);
     }
@@ -6764,6 +6792,222 @@ function renderProjectItemEditor() {
   });
   var t = document.getElementById("projItTitle");
   if (t && !it) t.focus();
+}
+
+// ============================================================
+// PROJECT IMPORT (v512) — a plan (a document, notes, a chat answer) turned
+// into a project by an AI chat, the golf-course pattern: copy a prompt,
+// paste the JSON back, preview, create. Confirmed 06/11/2026: every import
+// makes a NEW project (never updates one), items are tasks and links only,
+// and costs, quotes and contacts go in the notes. Each item keeps the plan's
+// section as its `group`, and its order through ascending `added` stamps.
+var PROJ_FILE_TAG = "project-v1";
+var PROJ_IMPORT_MAX_ITEMS = 400;
+function projImportPrompt() {
+  return "I want to turn the plan below into a project in my Hearth app.\n\n" +
+    "Reply with ONLY this JSON — no code fences, no commentary before or after:\n\n" +
+    "{\n" +
+    '  "hearth": "' + PROJ_FILE_TAG + '",\n' +
+    '  "name": "",\n' +
+    '  "status": "planning",\n' +
+    '  "target": "",\n' +
+    '  "notes": "",\n' +
+    '  "items": [\n' +
+    '    { "type": "task", "group": "", "title": "", "date": "", "notes": "", "done": false },\n' +
+    '    { "type": "link", "group": "", "title": "", "url": "", "notes": "" }\n' +
+    "  ]\n" +
+    "}\n\n" +
+    "Field notes:\n" +
+    "- name: a short project name.\n" +
+    "- status: \"idea\", \"planning\", \"active\" or \"done\".\n" +
+    "- target: the date the whole project should be finished by, as YYYY-MM-DD, or \"\" if the plan doesn't give one.\n" +
+    "- notes: the background someone needs to follow the plan: the overall approach, key facts and rules, and tips. " +
+    "Also put here any costs or budgets (keep the original currency), contact details (names, phone numbers, emails, addresses) and quotes. " +
+    "Plain text with line breaks. Summarise; don't copy the whole plan.\n" +
+    "- items: one entry per thing to do and per web address, in the order the plan does them.\n" +
+    "- type \"task\": something someone has to do, get, bring or check, including each document on a checklist. " +
+    "title: short, starting with a verb where natural. date: a due date as YYYY-MM-DD only if the plan gives a real date, otherwise \"\". " +
+    "notes: the detail for that step (how, where, what to watch for), or \"\". done: true only if the plan says it is already done.\n" +
+    "- type \"link\": a web address worth keeping. title: what it is. url: the full address starting with https://.\n" +
+    "- group: the section of the plan the item belongs to, e.g. \"Part A — Passport renewal\". Spell it exactly the same for every item in that section. " +
+    "Use \"\" for an item that belongs to no section. Aim for about 3 to 8 groups.\n" +
+    "- Don't make items for costs, quotes or contacts — they go in notes. Don't invent dates, prices or addresses that aren't in the plan.\n\n" +
+    "The plan:\n[paste the plan here, or attach it]";
+}
+function projIsoDate(v) {
+  var t = String(v == null ? "" : v).trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return "";
+  var d = new Date(t + "T00:00:00Z");
+  return (!isNaN(d.getTime()) && d.toISOString().slice(0, 10) === t) ? t : "";
+}
+function projImportStr(v) { return (typeof v === "string" || typeof v === "number") ? String(v) : ""; }
+// Returns {project:{name,status,target,notes,items}, skipped:[{title,why}],
+// badDates:n} or {error}. A file-level problem refuses the paste; an item
+// that can't be used is skipped and NAMED in the preview, never dropped
+// silently, and a bad date is cleared and counted.
+function parseProjectFile(raw) {
+  var obj;
+  try { obj = JSON.parse(raw); } catch (e) { return { error: "Couldn't read that as JSON — check it and try again." }; }
+  if (!obj || typeof obj !== "object" || Array.isArray(obj) || obj.hearth !== PROJ_FILE_TAG) {
+    return { error: "Not a Hearth project file. Make sure the JSON includes \"hearth\": \"" + PROJ_FILE_TAG + "\"." };
+  }
+  var name = projImportStr(obj.name).trim();
+  if (!name) return { error: "The file has no project name." };
+  if (obj.items != null && !Array.isArray(obj.items)) return { error: "\"items\" needs to be a list." };
+  var list = obj.items || [];
+  if (list.length > PROJ_IMPORT_MAX_ITEMS) return { error: "That's " + list.length + " items — the most one import takes is " + PROJ_IMPORT_MAX_ITEMS + "." };
+  var badDates = 0, skipped = [], items = [];
+  var rawTarget = projImportStr(obj.target).trim(), target = projIsoDate(rawTarget);
+  if (rawTarget && !target) badDates++;
+  list.forEach(function(x, n){
+    if (!x || typeof x !== "object" || Array.isArray(x)) { skipped.push({ title: "Item " + (n + 1), why: "not an item" }); return; }
+    var title = projImportStr(x.title).trim();
+    var type = projImportStr(x.type).trim().toLowerCase() || "task";
+    var label = title || ("Item " + (n + 1));
+    if (PROJ_RETIRED_ITEM_TYPES[type] === true) { skipped.push({ title: label, why: "a " + type + " &mdash; put it in the notes instead" }); return; }
+    if (type !== "task" && type !== "link") { skipped.push({ title: label, why: "unknown type &ldquo;" + esc(type) + "&rdquo;" }); return; }
+    if (!title) { skipped.push({ title: label, why: "no title" }); return; }
+    var notes = projImportStr(x.notes);
+    var url = "";
+    var rawUrl = projImportStr(x.url).trim();
+    if (type === "link") {
+      url = applianceLinkUrl(rawUrl);
+      if (!url) { skipped.push({ title: label, why: "no valid https web address" }); return; }
+    } else if (rawUrl && applianceLinkUrl(rawUrl) && notes.indexOf(rawUrl) === -1) {
+      notes = notes ? notes + "\n" + rawUrl : rawUrl;      // a task has no link field; keep the address, don't drop it
+    }
+    var date = "";
+    if (type === "task") {
+      var rawDate = projImportStr(x.date).trim();
+      date = projIsoDate(rawDate);
+      if (rawDate && !date) badDates++;
+    }
+    items.push({ type: type, group: projImportStr(x.group).trim(), title: title, date: date, url: url,
+                 notes: notes, done: type === "task" && x.done === true });
+  });
+  var st = projImportStr(obj.status).trim().toLowerCase();
+  return {
+    project: { name: name, status: projStatusMeta(st).key === st ? st : "planning", target: target,
+               notes: projImportStr(obj.notes), items: items },
+    skipped: skipped, badDates: badDates
+  };
+}
+// Always a NEW project. Every id (project and items) is stepped past every
+// id already in the store — item tombstones are keyed by id across all
+// projects, so a reused item id could be deleted by another project's tomb.
+function projApplyImport(pr) {
+  var all = getProjects(), now = Date.now(), used = {};
+  all.forEach(function(p){ used[p.id] = true; p.items.forEach(function(it){ used[it.id] = true; }); });
+  var nextId = projNewId();
+  function freshId() { while (used[nextId]) nextId++; var id = nextId; used[id] = true; nextId += 1000; return id; }
+  var proj = { id: freshId(), name: pr.name, status: pr.status, target: pr.target, notes: pr.notes,
+               items: [], addedBy: hearthUser, added: now, updated: now };
+  pr.items.forEach(function(x, i){
+    // `added` steps by 1ms in file order: undated tasks and grouped links sort
+    // by it, and groups are ordered by their first item, so the plan's order holds.
+    proj.items.push({ id: freshId(), type: x.type, title: x.title, date: x.date, amount: "", who: "", phone: "",
+                      url: x.url, notes: x.notes, group: x.group, done: x.done, sentAt: 0,
+                      addedBy: hearthUser, added: now + i, updated: now });
+  });
+  all.unshift(proj);
+  saveProjects(all);
+  return proj;
+}
+function openProjectImport() {
+  _projImportParsed = null;
+  _projEditId = null; _projItemId = null;
+  _projView = "import";
+  if (currentSection !== "projects") switchSection("projects"); else renderProjects();
+  window.scrollTo(0, 0);
+}
+function renderProjectImport() {
+  var el = document.getElementById("projectsContent");
+  if (!el) return;
+  _projEditing = true;                        // a sync mid-paste must not redraw the textarea away
+  function leave() {
+    _projEditing = false; _projCancelFn = null; _projImportParsed = null;
+    _projView = "list";
+    renderProjects(); window.scrollTo(0, 0);
+  }
+  _projCancelFn = leave;
+  var back = "<button id='projImpBack' style='border:none;background:none;color:" + PROJ_COLOR + ";font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;padding:6px 2px 10px;touch-action:manipulation'>&lsaquo; " + (_projImportParsed ? "Back" : "Cancel") + "</button>" +
+    "<div style='font-size:20px;font-weight:700;margin-bottom:10px;color:#2A2010'>Import a plan</div>";
+
+  if (!_projImportParsed) {
+    el.innerHTML = back +
+      "<div style='font-size:13px;color:#5A4630;background:#FBF4EA;border:1px solid #EDE3D5;border-radius:10px;padding:12px 14px;margin-bottom:12px;line-height:1.65'>" +
+        "<b>How to use this with an AI chat:</b>" +
+        "<div style='margin-top:6px'>1. Copy the prompt below.</div>" +
+        "<div>2. Paste it into a chat and add your plan at the end &mdash; paste the text or attach the document.</div>" +
+        "<div>3. Paste the JSON it replies with into the box below.</div>" +
+        "<div style='margin-top:6px;font-size:12px;color:#6E5E48'>It always makes a new project; nothing you already have is changed.</div>" +
+      "</div>" +
+      "<button id='projCopyPrompt' style='width:100%;padding:12px;border:1.5px solid " + PROJ_COLOR + ";background:#fff;color:" + PROJ_COLOR + ";border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:6px;touch-action:manipulation'>&#x1F4CB; Copy the prompt</button>" +
+      "<details style='margin-bottom:14px'><summary style='font-size:12px;color:#6E5E48;cursor:pointer;padding:4px 2px'>See the prompt</summary>" +
+        "<textarea id='projPromptText' readonly rows='10' style='" + PROJ_INP + ";margin-top:8px;resize:vertical;line-height:1.5;font-size:11px;font-family:monospace'>" + esc(projImportPrompt()) + "</textarea>" +
+      "</details>" +
+      "<textarea id='projImportJson' rows='8' placeholder='Paste the JSON here&hellip;' style='" + PROJ_INP + ";margin-bottom:14px;resize:vertical;line-height:1.5;font-size:12px;font-family:monospace'></textarea>" +
+      "<button id='projImportNext' style='width:100%;padding:13px;border:none;background:" + PROJ_COLOR + ";color:#fff;border-radius:10px;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;touch-action:manipulation'>Next &rsaquo;</button>";
+    document.getElementById("projImpBack").addEventListener("click", leave);
+    document.getElementById("projCopyPrompt").addEventListener("click", function(){ copyToClipboard(projImportPrompt(), "&#x1F4CB; Prompt copied"); });
+    document.getElementById("projImportNext").addEventListener("click", function(){
+      var raw = stripPasteFence(document.getElementById("projImportJson").value);
+      if (!raw) { toast("Paste the JSON first"); return; }
+      var parsed = parseProjectFile(raw);
+      if (parsed.error) { toast(esc(parsed.error)); return; }
+      _projImportParsed = parsed;
+      renderProjectImport();
+      window.scrollTo(0, 0);
+    });
+    return;
+  }
+
+  // Step 2 — the preview. Nothing is written until Create.
+  var pr = _projImportParsed.project;
+  var tasks = pr.items.filter(function(x){ return x.type === "task"; }).length;
+  var links = pr.items.length - tasks;
+  var groups = projItemGroups(pr.items.map(function(x, i){ return { group: x.group, type: x.type, added: i }; }));
+  var counts = [];
+  if (tasks) counts.push(tasks + (tasks === 1 ? " task" : " tasks"));
+  if (links) counts.push(links + (links === 1 ? " link" : " links"));
+  var named = groups.filter(function(g){ return g.label; });
+  if (named.length) counts.push(named.length + (named.length === 1 ? " group" : " groups"));
+  var html = back +
+    "<div style='background:#fff;border:1.5px solid #EDE3D5;border-radius:14px;padding:14px;margin-bottom:10px'>" +
+      "<div style='display:flex;align-items:flex-start;gap:8px'>" +
+        "<div style='flex:1;min-width:0;font-size:17px;font-weight:700;color:#2A2010;line-height:1.3'>" + esc(pr.name) + "</div>" +
+        projStatusPill(pr.status) +
+      "</div>" +
+      "<div style='font-size:13px;color:#6E5E48;margin-top:6px;line-height:1.6'>" +
+        (counts.length ? counts.join(" &middot; ") : "No items &mdash; just the project and its notes") +
+        (pr.target ? "<br>Target " + projDateText(pr.target) : "") + "</div>" +
+      (pr.notes ? "<details style='margin-top:8px'><summary style='font-size:12px;color:#6E5E48;cursor:pointer'>Notes (" + pr.notes.length + " characters)</summary>" +
+        "<div style='font-size:13px;color:#2A2010;line-height:1.55;white-space:pre-wrap;margin-top:6px'>" + esc(pr.notes) + "</div></details>" : "") +
+    "</div>";
+  groups.forEach(function(g){
+    var gt = g.items.filter(function(x){ return x.type === "task"; }).length;
+    var gl = g.items.length - gt;
+    html += "<div style='display:flex;gap:8px;font-size:13px;color:#2A2010;padding:6px 4px;border-bottom:1px solid #F1E9DD'>" +
+      "<div style='flex:1;min-width:0'>" + (g.label ? "&#x1F4C2; " + esc(g.label) : "<i style='color:#6E5E48'>No group</i>") + "</div>" +
+      "<div style='flex-shrink:0;color:#6E5E48'>" + [gt ? gt + " task" + (gt === 1 ? "" : "s") : "", gl ? gl + " link" + (gl === 1 ? "" : "s") : ""].filter(Boolean).join(", ") + "</div></div>";
+  });
+  var warn = [];
+  if (_projImportParsed.badDates) warn.push(_projImportParsed.badDates + (_projImportParsed.badDates === 1 ? " date wasn&rsquo;t" : " dates weren&rsquo;t") + " a real YYYY-MM-DD date and " + (_projImportParsed.badDates === 1 ? "was" : "were") + " left blank.");
+  if (warn.length) html += "<div style='font-size:12px;color:#8A4A10;margin-top:10px;line-height:1.5'>" + warn.join("<br>") + "</div>";
+  if (_projImportParsed.skipped.length) {
+    html += "<div style='font-size:12px;color:#B03030;margin-top:10px;line-height:1.6'><b>Not imported (" + _projImportParsed.skipped.length + "):</b>" +
+      _projImportParsed.skipped.map(function(k){ return "<div>&bull; " + esc(k.title) + " &mdash; " + k.why + "</div>"; }).join("") + "</div>";
+  }
+  html += "<button id='projImportGo' style='width:100%;margin-top:16px;padding:13px;border:none;background:" + PROJ_COLOR + ";color:#fff;border-radius:10px;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;touch-action:manipulation'>Create project</button>";
+  el.innerHTML = html;
+  document.getElementById("projImpBack").addEventListener("click", function(){ _projImportParsed = null; renderProjectImport(); window.scrollTo(0, 0); });
+  document.getElementById("projImportGo").addEventListener("click", function(){
+    var made = projApplyImport(pr);
+    _projEditing = false; _projCancelFn = null; _projImportParsed = null;
+    _projOpenId = made.id; _projView = "detail";
+    renderProjects(); window.scrollTo(0, 0);
+    toast("&#x1F528; Project created");
+  });
 }
 
 // ============================================================
@@ -20395,8 +20639,17 @@ document.getElementById("watchNewBtn").addEventListener("click", function(){ ope
 document.getElementById("watchRandomBtn").addEventListener("click", watchRandomPick);
 document.getElementById("hlNewBtn").addEventListener("click", function(){ openHealthEditor(null); });
 // v499: the click handler v449 forgot for Health — written with the button this time.
-document.getElementById("bnProjects").addEventListener("click", function(){ _projView = "list"; _projEditId = null; _projItemId = null; _projOpenId = null; switchSection("projects"); });
+document.getElementById("bnProjects").addEventListener("click", function(){ _projView = "list"; _projEditId = null; _projItemId = null; _projOpenId = null; _projImportParsed = null; switchSection("projects"); });
 document.getElementById("projNewBtn").addEventListener("click", function(){ openProjectEditor(null); });
+// v512: Import a plan, from the header ⋯ sheet. An open editor is unsaved
+// work, so it asks first (the golf importer's rule).
+document.getElementById("projImportBtn").addEventListener("click", function(){
+  if (_projEditing && _projCancelFn && _projView !== "import") {
+    confirmDialog("Discard changes?", function(){ openProjectImport(); }, function(){});
+    return;
+  }
+  openProjectImport();
+});
 document.getElementById("bnGolf").addEventListener("click", function(){ _golfView = "list"; _golfEditId = null; switchSection("golf"); });
 document.getElementById("golfNewBtn").addEventListener("click", golfNewRound);
 // v502: Import a course, from the header ⋯ sheet. A round being scored is
@@ -26042,48 +26295,41 @@ function buildTestSeed() {
     ],
 
     // Projects (v499): one of each status that matters on screen. The
-    // kitchen project is In progress and carries every item type, one
+    // kitchen project is In progress and carries both item types, one
     // overdue task (so the red count shows on Home and on the card), one
-    // task already copied to To-do, and two costs for the spent total. The
+    // task already copied to To-do, and two v512 groups plus an ungrouped
+    // task (so the detail shows both layouts). The
     // Idea project has an open task on purpose: it must NOT count on Home.
     projects:[
       { id:_tsId(), name:"Demo kitchen refit", status:"active", target:_tsDay(40),
         notes:"New worktops and splashback. Keep the existing units.",
         addedBy:"Cathal", added:_tsTs(-30, 10, 0), updated:_tsTs(-30, 10, 0),
         items:[
-          { id:_tsId(), type:"task", title:"Demo: measure the worktops", date:_tsDay(-3), amount:"", who:"", phone:"", url:"", notes:"", done:false, sentAt:0,
+          { id:_tsId(), type:"task", title:"Demo: measure the worktops", group:"Worktops", date:_tsDay(-3), amount:"", who:"", phone:"", url:"", notes:"", done:false, sentAt:0,
             addedBy:"Cathal", added:_tsTs(-30, 10, 0), updated:_tsTs(-30, 10, 0) },
-          { id:_tsId(), type:"task", title:"Demo: pick the splashback tiles", date:_tsDay(5), amount:"", who:"", phone:"", url:"", notes:"", done:false, sentAt:_tsTs(-2, 9, 0),
+          { id:_tsId(), type:"task", title:"Demo: pick the splashback tiles", group:"Splashback", date:_tsDay(5), amount:"", who:"", phone:"", url:"", notes:"", done:false, sentAt:_tsTs(-2, 9, 0),
             addedBy:"Petra", added:_tsTs(-10, 10, 0), updated:_tsTs(-2, 9, 0) },
-          { id:_tsId(), type:"task", title:"Demo: clear out the cupboards", date:"", amount:"", who:"", phone:"", url:"", notes:"", done:true, sentAt:0,
+          { id:_tsId(), type:"task", title:"Demo: clear out the cupboards", group:"", date:"", amount:"", who:"", phone:"", url:"", notes:"", done:true, sentAt:0,
             addedBy:"Petra", added:_tsTs(-28, 10, 0), updated:_tsTs(-20, 10, 0) },
-          { id:_tsId(), type:"quote", title:"Demo: fit worktops", date:_tsDay(-12), amount:1850, who:"Demo Joinery", phone:"021 000 0003", url:"https://example.com/demo-quote", notes:"Includes removal of the old ones.", done:false, sentAt:0,
-            addedBy:"Cathal", added:_tsTs(-12, 10, 0), updated:_tsTs(-12, 10, 0) },
-          { id:_tsId(), type:"cost", title:"Demo: tile samples", date:_tsDay(-8), amount:42.5, who:"Demo Tiles", phone:"", url:"", notes:"", done:false, sentAt:0,
-            addedBy:"Petra", added:_tsTs(-8, 10, 0), updated:_tsTs(-8, 10, 0) },
-          { id:_tsId(), type:"cost", title:"Demo: deposit", date:_tsDay(-6), amount:300, who:"Demo Joinery", phone:"", url:"", notes:"", done:false, sentAt:0,
-            addedBy:"Cathal", added:_tsTs(-6, 10, 0), updated:_tsTs(-6, 10, 0) },
-          { id:_tsId(), type:"contact", title:"Demo Joiner", date:"", amount:"", who:"Joiner", phone:"087 000 0004", url:"", notes:"Best before 9am.", done:false, sentAt:0,
-            addedBy:"Cathal", added:_tsTs(-14, 10, 0), updated:_tsTs(-14, 10, 0) },
-          { id:_tsId(), type:"link", title:"Demo worktop colours", date:"", amount:"", who:"", phone:"", url:"https://example.com/demo-worktops", notes:"", done:false, sentAt:0,
+          { id:_tsId(), type:"link", title:"Demo worktop colours", group:"Worktops", date:"", amount:"", who:"", phone:"", url:"https://example.com/demo-worktops", notes:"", done:false, sentAt:0,
             addedBy:"Petra", added:_tsTs(-15, 10, 0), updated:_tsTs(-15, 10, 0) }
         ] },
       { id:_tsId(), name:"Demo car tax renewal", status:"planning", target:_tsDay(18), notes:"",
         addedBy:"Petra", added:_tsTs(-5, 10, 0), updated:_tsTs(-5, 10, 0),
         items:[
-          { id:_tsId(), type:"task", title:"Demo: find the renewal letter", date:_tsDay(10), amount:"", who:"", phone:"", url:"", notes:"", done:false, sentAt:0,
+          { id:_tsId(), type:"task", title:"Demo: find the renewal letter", group:"", date:_tsDay(10), amount:"", who:"", phone:"", url:"", notes:"", done:false, sentAt:0,
             addedBy:"Petra", added:_tsTs(-5, 10, 0), updated:_tsTs(-5, 10, 0) }
         ] },
       { id:_tsId(), name:"Demo garden shed", status:"idea", target:"", notes:"Somewhere for the bikes.",
         addedBy:"Cathal", added:_tsTs(-45, 10, 0), updated:_tsTs(-45, 10, 0),
         items:[
-          { id:_tsId(), type:"task", title:"Demo: look at shed sizes", date:"", amount:"", who:"", phone:"", url:"", notes:"", done:false, sentAt:0,
+          { id:_tsId(), type:"task", title:"Demo: look at shed sizes", group:"", date:"", amount:"", who:"", phone:"", url:"", notes:"", done:false, sentAt:0,
             addedBy:"Cathal", added:_tsTs(-45, 10, 0), updated:_tsTs(-45, 10, 0) }
         ] },
       { id:_tsId(), name:"Demo hall repaint", status:"done", target:_tsDay(-60), notes:"",
         addedBy:"Cathal", added:_tsTs(-90, 10, 0), updated:_tsTs(-58, 10, 0),
         items:[
-          { id:_tsId(), type:"cost", title:"Demo: paint", date:_tsDay(-62), amount:96, who:"", phone:"", url:"", notes:"", done:false, sentAt:0,
+          { id:_tsId(), type:"task", title:"Demo: buy the paint", group:"", date:_tsDay(-62), amount:"", who:"", phone:"", url:"", notes:"Two tins of white, about €96.", done:true, sentAt:0,
             addedBy:"Cathal", added:_tsTs(-62, 10, 0), updated:_tsTs(-62, 10, 0) }
         ] }
     ],
