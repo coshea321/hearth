@@ -1073,7 +1073,7 @@ li.rcp-done.rcp-ing{text-decoration:line-through}
     </div>
     <div class="home-week-strip" id="homeWeekStrip"></div>
 
-    <div style="text-align:center;margin-top:20px;font-size:11px;color:#C8BEA8;font-weight:600;letter-spacing:.4px" id="appVersionLabel">v512 · 06/11/2026</div>
+    <div style="text-align:center;margin-top:20px;font-size:11px;color:#C8BEA8;font-weight:600;letter-spacing:.4px" id="appVersionLabel">v513 · 06/11/2026</div>
 
   </div>
 </div>
@@ -6376,6 +6376,7 @@ var _projEditId    = null;     // project editor: id being edited, null = new
 var _projItemId    = null;     // item editor: id being edited, null = new
 var _projItemType  = "task";   // item editor: the type being added/edited
 var _projShowDone  = false;    // Done group expanded — session only
+var _projNotesOpen = {};       // v513: project id -> long notes expanded — session only
 var _projEditing   = false;    // sync-render guard, same role as _healthEditing
 var _projCancelFn  = null;     // back-button discard closure (v345 pattern)
 
@@ -6499,7 +6500,14 @@ function renderProjectDetail() {
   if (p.target) facts.push("Target " + projDateText(p.target));
   if (c.open || c.done) facts.push(c.done + " of " + (c.open + c.done) + " tasks done" + (c.overdue ? " &middot; <b style='color:#B03030'>" + c.overdue + " overdue</b>" : ""));
   if (facts.length) html += "<div style='font-size:13px;color:#6E5E48;margin-top:6px;line-height:1.6'>" + facts.join("<br>") + "</div>";
-  if (p.notes) html += "<div style='font-size:14px;color:#2A2010;line-height:1.55;white-space:pre-wrap;margin-top:10px'>" + esc(p.notes) + "</div>";
+  // v513: long notes (an imported plan's background) start folded to about
+  // five lines so the tasks aren't pushed a screen down; tap to unfold.
+  var notesLong = p.notes && (p.notes.length > 260 || p.notes.split("\n").length > 6);
+  var notesOpen = !!_projNotesOpen[p.id];
+  if (p.notes) html += "<div id='projNotesBody' style='font-size:14px;color:#2A2010;line-height:1.55;white-space:pre-wrap;margin-top:10px" +
+      (notesLong && !notesOpen ? ";max-height:7.75em;overflow:hidden;-webkit-mask-image:linear-gradient(#000 60%,transparent);mask-image:linear-gradient(#000 60%,transparent)" : "") + "'>" + esc(p.notes) + "</div>";
+  if (notesLong) html += "<button id='projNotesToggle' type='button' aria-expanded='" + (notesOpen ? "true" : "false") + "' style='border:none;background:none;color:" + PROJ_COLOR + ";font-family:inherit;font-size:13px;font-weight:700;padding:8px 0 0;cursor:pointer;touch-action:manipulation'>" +
+      (notesOpen ? "Show less &#x25B2;" : "Show more &#x25BC;") + "</button>";
   html += "<div style='display:flex;gap:8px;margin-top:12px'>" +
     projBtn("proj-edit", "Edit", "flex:1") +
     projBtn("proj-del", "Delete", "flex:1;color:#B03030;border-color:#F0D0D0") +
@@ -6550,6 +6558,8 @@ function renderProjectDetail() {
 
   document.getElementById("projBack").addEventListener("click", function(){ _projView = "list"; _projOpenId = null; renderProjects(); window.scrollTo(0, 0); });
   el.querySelector(".proj-edit").addEventListener("click", function(){ openProjectEditor(p.id); });
+  var nt = document.getElementById("projNotesToggle");
+  if (nt) nt.addEventListener("click", function(){ _projNotesOpen[p.id] = !_projNotesOpen[p.id]; renderProjects(); });
   el.querySelector(".proj-del").addEventListener("click", function(){
     confirmDialog("Delete &ldquo;" + esc(p.name || "this project") + "&rdquo; and everything in it?", function(){ projDelete(p.id); });
   });
@@ -6716,11 +6726,13 @@ function renderProjectItemEditor() {
   if (f.phone)  html += "<div style='" + PROJ_LBL + ";margin-top:14px'>Phone " + PROJ_OPT + "</div><input id='projItPhone' type='tel' inputmode='tel' placeholder='e.g. 087 123 4567' style='" + PROJ_INP + "' value='" + v("phone") + "'>";
   if (f.url)    html += "<div style='" + PROJ_LBL + ";margin-top:14px'>" + f.url + (type === "link" ? "" : " " + PROJ_OPT) + "</div><input id='projItUrl' type='url' inputmode='url' placeholder='https://&hellip;' style='" + PROJ_INP + "' value='" + v("url") + "'>";
   // v512: the group — free text, offered the project's existing groups.
+  // v513: as tappable chips under the field, not a native <datalist> — on
+  // Android the datalist popup turns near-transparent once you start typing.
   var groupOpts = projItemGroups(p.items.filter(projItemShown)).filter(function(g){ return g.label; })
-    .map(function(g){ return "<option value='" + esc(g.label) + "'></option>"; }).join("");
+    .map(function(g){ return "<button type='button' class='proj-grp-chip' data-g='" + esc(g.label) + "' style='padding:7px 11px;border:1.5px solid #D9C8B0;background:#fff;color:#2A2010;border-radius:16px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;touch-action:manipulation'>" + esc(g.label) + "</button>"; }).join("");
   html += "<div style='" + PROJ_LBL + ";margin-top:14px'>Group " + PROJ_OPT + "</div>" +
-    "<input id='projItGroup' type='text' list='projItGroupList' autocomplete='off' placeholder='e.g. Part A &mdash; passport' style='" + PROJ_INP + "' value='" + v("group") + "'>" +
-    "<datalist id='projItGroupList'>" + groupOpts + "</datalist>";
+    "<input id='projItGroup' type='text' autocomplete='off' placeholder='e.g. Part A &mdash; passport' style='" + PROJ_INP + "' value='" + v("group") + "'>" +
+    (groupOpts ? "<div id='projItGroupChips' style='display:flex;flex-wrap:wrap;gap:6px;margin-top:8px'>" + groupOpts + "</div>" : "");
   html += "<div style='" + PROJ_LBL + ";margin-top:14px'>Notes " + PROJ_OPT + "</div>" +
     "<textarea id='projItNotes' rows='3' style='" + PROJ_INP + ";resize:vertical'>" + v("notes") + "</textarea>";
   if (type === "task" && it && !it.done) {
@@ -6733,6 +6745,23 @@ function renderProjectItemEditor() {
   if (it) html += "<button type='button' id='projItDelete' style='width:100%;margin-top:10px;padding:12px;border:1.5px solid #F0D0D0;background:#fff;color:#B03030;border-radius:10px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;touch-action:manipulation'>Delete this " + meta.label.toLowerCase() + "</button>";
   el.innerHTML = html;
   projWireDateClears(el);
+  // Chips filter as you type (contains, any case); the exact current value hides.
+  var grpIn = document.getElementById("projItGroup");
+  var chips = el.querySelectorAll(".proj-grp-chip");
+  function filterGroupChips() {
+    var q = grpIn.value.trim().toLowerCase();
+    chips.forEach(function(c){
+      var g = c.dataset.g.toLowerCase();
+      c.style.display = (g !== q && (!q || g.indexOf(q) !== -1)) ? "" : "none";
+    });
+  }
+  if (grpIn && chips.length) {
+    grpIn.addEventListener("input", filterGroupChips);
+    chips.forEach(function(c){
+      c.addEventListener("click", function(){ grpIn.value = c.dataset.g; filterGroupChips(); });
+    });
+    filterGroupChips();
+  }
 
   function val(id) { var e = document.getElementById(id); return e ? e.value : ""; }
   document.getElementById("projEdCancel").addEventListener("click", leave);
