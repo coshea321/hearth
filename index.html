@@ -1073,7 +1073,7 @@ li.rcp-done.rcp-ing{text-decoration:line-through}
     </div>
     <div class="home-week-strip" id="homeWeekStrip"></div>
 
-    <div style="text-align:center;margin-top:20px;font-size:11px;color:#C8BEA8;font-weight:600;letter-spacing:.4px" id="appVersionLabel">v514 · 07/11/2026</div>
+    <div style="text-align:center;margin-top:20px;font-size:11px;color:#C8BEA8;font-weight:600;letter-spacing:.4px" id="appVersionLabel">v515 · 07/11/2026</div>
 
   </div>
 </div>
@@ -6294,6 +6294,79 @@ function projItemGroups(items) {
   order.forEach(function(k){ out.push(byKey[k]); });
   return out;
 }
+// v515: manual task order. A task's `order` is a number, or "" if never set.
+// A group's open tasks follow their due dates until someone moves one; that
+// first move numbers every open task in the group 1..n as shown, and from
+// then on a move changes ONLY the moved task (it takes the midpoint between
+// its new neighbours). Do NOT renumber the whole group on every move: the
+// item merge is newest-wins per task, so two phones each renumbering n tasks
+// would sync into a mix of both orders. Done tasks sink below the open ones
+// and keep their number, so un-ticking one puts it back where it was.
+function projHasOrder(it) { return !!it && typeof it.order === "number" && isFinite(it.order); }
+function projTaskDateCmp(a, b) {
+  var da = String(a.date || ""), db = String(b.date || "");
+  if (da && db && da !== db) return da.localeCompare(db);
+  if (da && !db) return -1;
+  if (!da && db) return 1;
+  return (a.added || 0) - (b.added || 0);
+}
+// Tasks of ONE group, in display order: open first (by `order` once the
+// group has one — tasks without one, e.g. from an older phone, after them by
+// date), then done ones by date.
+function projSortTasks(items) {
+  var open = items.filter(function(it){ return !it.done; });
+  var done = items.filter(function(it){ return !!it.done; });
+  var ordered = open.some(projHasOrder);
+  open.sort(function(a, b){
+    if (ordered) {
+      var ha = projHasOrder(a), hb = projHasOrder(b);
+      if (ha !== hb) return ha ? -1 : 1;
+      if (ha && a.order !== b.order) return a.order - b.order;
+      if (ha) return ((a.added || 0) - (b.added || 0)) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+    }
+    return projTaskDateCmp(a, b);
+  });
+  done.sort(projTaskDateCmp);
+  return open.concat(done);
+}
+function projGroupTasks(p, key, exceptId) {
+  return projItemsOf(p).filter(function(x){
+    return projItemShown(x) && projItemTypeMeta(x.type).key === "task" && projGroupKey(x) === key && x.id !== exceptId;
+  });
+}
+// The order a task gets on joining a group (added, or moved by its Group
+// field): the end of the list if the group has been ordered, else "".
+function projOrderForJoin(p, key, exceptId) {
+  var max = null;
+  projGroupTasks(p, key, exceptId).forEach(function(x){ if (projHasOrder(x) && (max === null || x.order > max)) max = x.order; });
+  return max === null ? "" : Math.floor(max) + 1;
+}
+function projMoveTask(projId, itemId, dir) {
+  var all = getProjects();
+  var p = projFind(all, projId);
+  var it = p ? projFind(p.items, itemId) : null;
+  if (!it || it.done || projItemTypeMeta(it.type).key !== "task") return;
+  var open = projSortTasks(projGroupTasks(p, projGroupKey(it))).filter(function(x){ return !x.done; });
+  var i = open.indexOf(it), j = i + dir;
+  if (i < 0 || j < 0 || j >= open.length) return;     // -1 guard (CLAUDE.md), and the ends
+  var now = Date.now();
+  function renumber(list) {
+    list.forEach(function(x, n){ if (x.order !== n + 1) { x.order = n + 1; x.updated = now; } });
+  }
+  if (!open.every(projHasOrder)) renumber(open);      // the group's first move
+  var rest = open.filter(function(x){ return x !== it; });
+  var before = rest[j - 1], after = rest[j];
+  var o = !before ? after.order - 1 : !after ? before.order + 1 : (before.order + after.order) / 2;
+  if (before && after && !(o > before.order && o < after.order)) {
+    rest.splice(j, 0, it);                             // tied or worn-out gap: renumber once
+    renumber(rest);
+  } else {
+    it.order = o;
+    it.updated = now;                                  // the ITEM only — see the header comment
+  }
+  saveProjects(all);
+  renderProjects();
+}
 function projDateText(v) {
   var s = String(v || "");
   if (!s) return "";
@@ -6377,6 +6450,7 @@ var _projItemId    = null;     // item editor: id being edited, null = new
 var _projItemType  = "task";   // item editor: the type being added/edited
 var _projShowDone  = false;    // Done group expanded — session only
 var _projNotesOpen = {};       // v513: project id -> long notes expanded — session only
+var _projReorderId = null;     // v515: project whose tasks show the move arrows — session only
 var _projEditing   = false;    // sync-render guard, same role as _healthEditing
 var _projCancelFn  = null;     // back-button discard closure (v345 pattern)
 
@@ -6451,7 +6525,9 @@ function projCardHTML(p) {
   "</div>";
 }
 
-function projItemRowHTML(p, it) {
+// v515: `pos` (optional) = { num, up, down } for an open task — its number in
+// its group, and which move arrows to draw (only while reordering).
+function projItemRowHTML(p, it, pos) {
   var t = projItemTypeMeta(it.type).key;
   var f = projItemFields(t);
   var idAttr = " data-iid='" + esc(String(it.id)) + "'";
@@ -6474,9 +6550,16 @@ function projItemRowHTML(p, it) {
     h += "<span style='flex-shrink:0;width:44px;text-align:center;font-size:18px'>" + projItemTypeMeta(t).ico + "</span>";
   }
   h += "<div class='proj-item-body'" + idAttr + " style='flex:1;min-width:0;padding:8px 0;cursor:pointer;touch-action:manipulation'>" +
-      "<div style='font-size:14px;font-weight:600;color:#2A2010;line-height:1.3" + (t === "task" && it.done ? ";text-decoration:line-through" : "") + "'>" + esc(it.title || "Untitled") + "</div>" +
+      "<div style='font-size:14px;font-weight:600;color:#2A2010;line-height:1.3" + (t === "task" && it.done ? ";text-decoration:line-through" : "") + "'>" + (pos && pos.num ? "<span style='color:" + PROJ_COLOR + ";font-weight:700'>" + pos.num + ".</span> " : "") + esc(it.title || "Untitled") + "</div>" +
       (sub.length ? "<div style='font-size:12px;color:#6E5E48;margin-top:2px'>" + sub.join(" &middot; ") + "</div>" : "") +
     "</div>";
+  if (pos && (pos.up || pos.down)) {
+    [["up", -1, "&#x2191;", "Move up: "], ["down", 1, "&#x2193;", "Move down: "]].forEach(function(a){
+      var on = pos[a[0]];
+      h += "<button class='proj-move'" + idAttr + " data-dir='" + a[1] + "'" + (on ? "" : " disabled") + " aria-label='" + a[3] + esc(it.title || "task") + "' " +
+        "style='flex-shrink:0;width:44px;height:44px;border:1.5px solid #E2D6C6;border-radius:9px;background:#fff;color:" + PROJ_COLOR + ";font-size:20px;font-weight:700;cursor:pointer;touch-action:manipulation" + (on ? "" : ";opacity:.3") + "'>" + a[2] + "</button>";
+    });
+  }
   if (amt !== null) h += "<span style='flex-shrink:0;font-size:14px;font-weight:700;color:#2A2010'>" + applianceMoney(amt) + "</span>";
   if (tel) h += "<a href='" + esc(tel) + "' aria-label='Call " + esc(it.title || "") + "' style='flex-shrink:0;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:1.5px solid #E2D6C6;border-radius:9px;text-decoration:none;font-size:16px'>&#x1F4DE;</a>";
   if (url) h += "<a href='" + esc(url) + "' target='_blank' rel='noopener' aria-label='Open " + esc(it.title || "link") + "' style='flex-shrink:0;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:1.5px solid #E2D6C6;border-radius:9px;text-decoration:none;color:" + PROJ_COLOR + ";font-size:16px;font-weight:700'>&#x2197;</a>";
@@ -6525,6 +6608,13 @@ function renderProjectDetail() {
   // exactly as before groups existed; then each named group, in the order
   // its first item was added (so an imported plan keeps its own order),
   // with its tasks then its links.
+  // v515: the Reorder toggle, only when some group has two open tasks to swap.
+  var canReorder = projItemGroups(p.items.filter(projItemShown)).some(function(g){
+    return g.items.filter(function(it){ return projItemTypeMeta(it.type).key === "task" && !it.done; }).length > 1;
+  });
+  var reordering = canReorder && _projReorderId === p.id;
+  if (canReorder) html += "<button id='projReorder' type='button' aria-pressed='" + (reordering ? "true" : "false") + "' style='display:block;width:100%;margin:8px 0 0;padding:10px;border:1.5px solid " + (reordering ? PROJ_COLOR : "#E2D6C6") + ";background:" + (reordering ? PROJ_COLOR : "#fff") + ";color:" + (reordering ? "#fff" : PROJ_COLOR) + ";border-radius:9px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;touch-action:manipulation'>" +
+    (reordering ? "&#x2713; Done reordering" : "&#x2195;&#xFE0F; Reorder tasks") + "</button>";
   projItemGroups(p.items.filter(projItemShown)).forEach(function(g){
     if (g.label) {
       var gc = { open:0, done:0 };
@@ -6536,27 +6626,26 @@ function renderProjectDetail() {
       var items = g.items.filter(function(it){ return projItemTypeMeta(it.type).key === ty.key; });
       if (!items.length) return;
       if (ty.key === "task") {
-        // Open first, soonest due first (undated after the dated); done ones last.
-        items.sort(function(a, b){
-          if (!!a.done !== !!b.done) return a.done ? 1 : -1;
-          var da = String(a.date || ""), db = String(b.date || "");
-          if (da && db && da !== db) return da.localeCompare(db);
-          if (da && !db) return -1;
-          if (!da && db) return 1;
-          return (a.added || 0) - (b.added || 0);
-        });
+        // v515: open tasks in their set order (by due date until one is
+        // moved), numbered 1..n within the group; done ones last.
+        items = projSortTasks(items);
       } else if (g.label) {
         items.sort(function(a, b){ return (a.added || 0) - (b.added || 0); });
       } else {
         items.sort(function(a, b){ return String(a.title || "").localeCompare(String(b.title || "")); });
       }
       if (!g.label) html += projGroupHeader(ty.ico + " " + ty.plural + " &middot; " + items.length);
-      items.forEach(function(it){ html += projItemRowHTML(p, it); });
+      var openN = ty.key === "task" ? items.filter(function(it){ return !it.done; }).length : 0;
+      items.forEach(function(it, n){
+        var pos = (ty.key === "task" && !it.done) ? { num: n + 1 } : null;
+        if (pos && reordering) { pos.up = n > 0; pos.down = n < openN - 1; }
+        html += projItemRowHTML(p, it, pos);
+      });
     });
   });
   el.innerHTML = html;
 
-  document.getElementById("projBack").addEventListener("click", function(){ _projView = "list"; _projOpenId = null; renderProjects(); window.scrollTo(0, 0); });
+  document.getElementById("projBack").addEventListener("click", function(){ _projView = "list"; _projOpenId = null; _projReorderId = null; renderProjects(); window.scrollTo(0, 0); });
   el.querySelector(".proj-edit").addEventListener("click", function(){ openProjectEditor(p.id); });
   var nt = document.getElementById("projNotesToggle");
   if (nt) nt.addEventListener("click", function(){ _projNotesOpen[p.id] = !_projNotesOpen[p.id]; renderProjects(); });
@@ -6568,6 +6657,11 @@ function renderProjectDetail() {
   });
   el.querySelectorAll(".proj-tick").forEach(function(b){
     b.addEventListener("click", function(){ projToggleTask(p.id, +b.dataset.iid); });
+  });
+  var ro = document.getElementById("projReorder");
+  if (ro) ro.addEventListener("click", function(){ _projReorderId = reordering ? null : p.id; renderProjects(); });
+  el.querySelectorAll(".proj-move").forEach(function(b){
+    b.addEventListener("click", function(){ projMoveTask(p.id, +b.dataset.iid, +b.dataset.dir); });
   });
   el.querySelectorAll(".proj-item-body").forEach(function(b){
     b.addEventListener("click", function(){ openProjectItemEditor(+b.dataset.iid); });
@@ -6807,11 +6901,14 @@ function renderProjectItemEditor() {
     if (_projItemId != null) {
       var cur = projFind(pp.items, _projItemId);
       if (!cur) { toast("That item is no longer here"); leave(); return; }
+      // v515: a task moved to another group joins the end of that group's order.
+      if (type === "task" && projGroupKey(cur) !== projGroupKey(vals)) vals.order = projOrderForJoin(pp, projGroupKey(vals), cur.id);
       Object.keys(vals).forEach(function(k){ cur[k] = vals[k]; });
       cur.updated = now;                               // the ITEM only
     } else {
       var fresh = { id: projNewId(), type: type, title: "", date: "", amount: "", who: "", phone: "", url: "",
-                    notes: "", group: "", done: false, sentAt: 0, addedBy: hearthUser, added: now, updated: now };
+                    notes: "", group: "", order: "", done: false, sentAt: 0, addedBy: hearthUser, added: now, updated: now };
+      if (type === "task") vals.order = projOrderForJoin(pp, projGroupKey(vals));   // v515
       Object.keys(vals).forEach(function(k){ fresh[k] = vals[k]; });
       pp.items.push(fresh);
     }
@@ -6936,6 +7033,7 @@ function projApplyImport(pr) {
     // by it, and groups are ordered by their first item, so the plan's order holds.
     proj.items.push({ id: freshId(), type: x.type, title: x.title, date: x.date, amount: "", who: "", phone: "",
                       url: x.url, notes: x.notes, group: x.group, done: x.done, sentAt: 0,
+                      order: x.type === "task" ? i + 1 : "",   // v515: the plan's own order, from the start
                       addedBy: hearthUser, added: now + i, updated: now });
   });
   all.unshift(proj);
@@ -26355,31 +26453,33 @@ function buildTestSeed() {
         notes:"New worktops and splashback. Keep the existing units.",
         addedBy:"Cathal", added:_tsTs(-30, 10, 0), updated:_tsTs(-30, 10, 0),
         items:[
-          { id:_tsId(), type:"task", title:"Demo: measure the worktops", group:"Worktops", date:_tsDay(-3), amount:"", who:"", phone:"", url:"", notes:"", done:false, sentAt:0,
+          { id:_tsId(), type:"task", title:"Demo: measure the worktops", group:"Worktops", order:2, date:_tsDay(-3), amount:"", who:"", phone:"", url:"", notes:"", done:false, sentAt:0,
             addedBy:"Cathal", added:_tsTs(-30, 10, 0), updated:_tsTs(-30, 10, 0) },
-          { id:_tsId(), type:"task", title:"Demo: pick the splashback tiles", group:"Splashback", date:_tsDay(5), amount:"", who:"", phone:"", url:"", notes:"", done:false, sentAt:_tsTs(-2, 9, 0),
+          { id:_tsId(), type:"task", title:"Demo: get three worktop quotes", group:"Worktops", order:1, date:_tsDay(12), amount:"", who:"", phone:"", url:"", notes:"", done:false, sentAt:0,
+            addedBy:"Petra", added:_tsTs(-29, 10, 0), updated:_tsTs(-1, 10, 0) },
+          { id:_tsId(), type:"task", title:"Demo: pick the splashback tiles", group:"Splashback", order:"", date:_tsDay(5), amount:"", who:"", phone:"", url:"", notes:"", done:false, sentAt:_tsTs(-2, 9, 0),
             addedBy:"Petra", added:_tsTs(-10, 10, 0), updated:_tsTs(-2, 9, 0) },
-          { id:_tsId(), type:"task", title:"Demo: clear out the cupboards", group:"", date:"", amount:"", who:"", phone:"", url:"", notes:"", done:true, sentAt:0,
+          { id:_tsId(), type:"task", title:"Demo: clear out the cupboards", group:"", order:"", date:"", amount:"", who:"", phone:"", url:"", notes:"", done:true, sentAt:0,
             addedBy:"Petra", added:_tsTs(-28, 10, 0), updated:_tsTs(-20, 10, 0) },
-          { id:_tsId(), type:"link", title:"Demo worktop colours", group:"Worktops", date:"", amount:"", who:"", phone:"", url:"https://example.com/demo-worktops", notes:"", done:false, sentAt:0,
+          { id:_tsId(), type:"link", title:"Demo worktop colours", group:"Worktops", order:"", date:"", amount:"", who:"", phone:"", url:"https://example.com/demo-worktops", notes:"", done:false, sentAt:0,
             addedBy:"Petra", added:_tsTs(-15, 10, 0), updated:_tsTs(-15, 10, 0) }
         ] },
       { id:_tsId(), name:"Demo car tax renewal", status:"planning", target:_tsDay(18), notes:"",
         addedBy:"Petra", added:_tsTs(-5, 10, 0), updated:_tsTs(-5, 10, 0),
         items:[
-          { id:_tsId(), type:"task", title:"Demo: find the renewal letter", group:"", date:_tsDay(10), amount:"", who:"", phone:"", url:"", notes:"", done:false, sentAt:0,
+          { id:_tsId(), type:"task", title:"Demo: find the renewal letter", group:"", order:"", date:_tsDay(10), amount:"", who:"", phone:"", url:"", notes:"", done:false, sentAt:0,
             addedBy:"Petra", added:_tsTs(-5, 10, 0), updated:_tsTs(-5, 10, 0) }
         ] },
       { id:_tsId(), name:"Demo garden shed", status:"idea", target:"", notes:"Somewhere for the bikes.",
         addedBy:"Cathal", added:_tsTs(-45, 10, 0), updated:_tsTs(-45, 10, 0),
         items:[
-          { id:_tsId(), type:"task", title:"Demo: look at shed sizes", group:"", date:"", amount:"", who:"", phone:"", url:"", notes:"", done:false, sentAt:0,
+          { id:_tsId(), type:"task", title:"Demo: look at shed sizes", group:"", order:"", date:"", amount:"", who:"", phone:"", url:"", notes:"", done:false, sentAt:0,
             addedBy:"Cathal", added:_tsTs(-45, 10, 0), updated:_tsTs(-45, 10, 0) }
         ] },
       { id:_tsId(), name:"Demo hall repaint", status:"done", target:_tsDay(-60), notes:"",
         addedBy:"Cathal", added:_tsTs(-90, 10, 0), updated:_tsTs(-58, 10, 0),
         items:[
-          { id:_tsId(), type:"task", title:"Demo: buy the paint", group:"", date:_tsDay(-62), amount:"", who:"", phone:"", url:"", notes:"Two tins of white, about €96.", done:true, sentAt:0,
+          { id:_tsId(), type:"task", title:"Demo: buy the paint", group:"", order:"", date:_tsDay(-62), amount:"", who:"", phone:"", url:"", notes:"Two tins of white, about €96.", done:true, sentAt:0,
             addedBy:"Cathal", added:_tsTs(-62, 10, 0), updated:_tsTs(-62, 10, 0) }
         ] }
     ],
