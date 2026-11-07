@@ -1073,7 +1073,7 @@ li.rcp-done.rcp-ing{text-decoration:line-through}
     </div>
     <div class="home-week-strip" id="homeWeekStrip"></div>
 
-    <div style="text-align:center;margin-top:20px;font-size:11px;color:#C8BEA8;font-weight:600;letter-spacing:.4px" id="appVersionLabel">v515 · 07/11/2026</div>
+    <div style="text-align:center;margin-top:20px;font-size:11px;color:#C8BEA8;font-weight:600;letter-spacing:.4px" id="appVersionLabel">v516 · 07/11/2026</div>
 
   </div>
 </div>
@@ -6415,6 +6415,8 @@ function projDelete(id) {
   all.splice(i, 1);
   addTomb("projects", id);
   saveProjects(all);
+  var folds = projFolds();                             // v516: drop its folded sections too
+  if (Object.prototype.hasOwnProperty.call(folds, id)) { delete folds[id]; try { storeSet("fl4_proj_folds", folds); } catch (e) {} }
   _projOpenId = null; _projView = "list";
   renderProjects();
   toast("Deleted");
@@ -6459,6 +6461,34 @@ function projBtn(cls, label, extra, attrs) {
 }
 function projGroupHeader(text) {
   return "<div style='font-size:11px;font-weight:700;color:#7A6A55;text-transform:uppercase;letter-spacing:.5px;margin:14px 2px 7px'>" + text + "</div>";
+}
+// v516: folded sections of a project's detail. Device-local UI state like
+// fl4_catOpen_* — not synced, not in the backup — so each phone folds its
+// own view. Shape { projectId: { sectionKey: 1 } }; absent = open. Section
+// keys: "t:task" / "t:link" for the ungrouped type sections, "g:" + the
+// group's projGroupKey for a named group. The "t:"/"g:" prefix also keeps a
+// group typed as "__proto__" from reading an inherited property.
+function projFolds() {
+  var f = null;
+  try { f = storeGet("fl4_proj_folds"); } catch (e) {}
+  return (f && typeof f === "object" && !Array.isArray(f)) ? f : {};
+}
+function projSecFolded(projId, sec) {
+  var f = projFolds()[projId];
+  return !!(f && typeof f === "object" && Object.prototype.hasOwnProperty.call(f, sec) && f[sec]);
+}
+function projSetFolds(projId, secs, folded) {
+  var all = projFolds();
+  var f = (all[projId] && typeof all[projId] === "object") ? all[projId] : {};
+  secs.forEach(function(s){ if (folded) f[s] = 1; else delete f[s]; });
+  if (Object.keys(f).length) all[projId] = f; else delete all[projId];
+  try { storeSet("fl4_proj_folds", all); } catch (e) {}
+}
+function projFoldHeader(sec, text, folded) {
+  return "<button type='button' class='proj-fold' data-sec='" + esc(sec) + "' aria-expanded='" + (folded ? "false" : "true") + "' " +
+    "style='display:flex;align-items:center;gap:8px;width:100%;min-height:44px;margin:4px 0 3px;padding:8px 2px;border:none;background:none;text-align:left;font-family:inherit;font-size:11px;font-weight:700;color:#7A6A55;text-transform:uppercase;letter-spacing:.5px;cursor:pointer;touch-action:manipulation'>" +
+    "<span style='flex:1;min-width:0'>" + text + "</span>" +
+    "<span aria-hidden='true' style='flex-shrink:0;font-size:12px;color:" + PROJ_COLOR + "'>" + (folded ? "&#x25BC;" : "&#x25B2;") + "</span></button>";
 }
 
 function renderProjects() {
@@ -6615,16 +6645,24 @@ function renderProjectDetail() {
   var reordering = canReorder && _projReorderId === p.id;
   if (canReorder) html += "<button id='projReorder' type='button' aria-pressed='" + (reordering ? "true" : "false") + "' style='display:block;width:100%;margin:8px 0 0;padding:10px;border:1.5px solid " + (reordering ? PROJ_COLOR : "#E2D6C6") + ";background:" + (reordering ? PROJ_COLOR : "#fff") + ";color:" + (reordering ? "#fff" : PROJ_COLOR) + ";border-radius:9px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;touch-action:manipulation'>" +
     (reordering ? "&#x2713; Done reordering" : "&#x2195;&#xFE0F; Reorder tasks") + "</button>";
+  // v516: every section header folds its section; the sections are built
+  // into secHtml first so the Collapse all / Expand all button above them
+  // knows how many there are and whether any is open.
+  var secHtml = "", secKeys = [], anyOpen = false;
   projItemGroups(p.items.filter(projItemShown)).forEach(function(g){
+    var gKey = g.label ? "g:" + projGroupKey(g.items[0]) : "";
+    var gFolded = !!gKey && projSecFolded(p.id, gKey);
     if (g.label) {
       var gc = { open:0, done:0 };
       g.items.forEach(function(it){ if (projItemTypeMeta(it.type).key === "task") { if (it.done) gc.done++; else gc.open++; } });
-      html += projGroupHeader("&#x1F4C2; " + esc(g.label) + " &middot; " +
-        (gc.open + gc.done ? gc.done + " of " + (gc.open + gc.done) + " done" : g.items.length));
+      secKeys.push(gKey); if (!gFolded) anyOpen = true;
+      secHtml += projFoldHeader(gKey, "&#x1F4C2; " + esc(g.label) + " &middot; " +
+        (gc.open + gc.done ? gc.done + " of " + (gc.open + gc.done) + " done" : g.items.length), gFolded);
     }
     PROJ_ITEM_TYPES.forEach(function(ty){
       var items = g.items.filter(function(it){ return projItemTypeMeta(it.type).key === ty.key; });
       if (!items.length) return;
+      if (gFolded) return;
       if (ty.key === "task") {
         // v515: open tasks in their set order (by due date until one is
         // moved), numbered 1..n within the group; done ones last.
@@ -6634,15 +6672,23 @@ function renderProjectDetail() {
       } else {
         items.sort(function(a, b){ return String(a.title || "").localeCompare(String(b.title || "")); });
       }
-      if (!g.label) html += projGroupHeader(ty.ico + " " + ty.plural + " &middot; " + items.length);
+      if (!g.label) {
+        var tKey = "t:" + ty.key, tFolded = projSecFolded(p.id, tKey);
+        secKeys.push(tKey); if (!tFolded) anyOpen = true;
+        secHtml += projFoldHeader(tKey, ty.ico + " " + ty.plural + " &middot; " + items.length, tFolded);
+        if (tFolded) return;
+      }
       var openN = ty.key === "task" ? items.filter(function(it){ return !it.done; }).length : 0;
       items.forEach(function(it, n){
         var pos = (ty.key === "task" && !it.done) ? { num: n + 1 } : null;
         if (pos && reordering) { pos.up = n > 0; pos.down = n < openN - 1; }
-        html += projItemRowHTML(p, it, pos);
+        secHtml += projItemRowHTML(p, it, pos);
       });
     });
   });
+  if (secKeys.length > 1) html += "<div style='text-align:right;margin-top:6px'><button id='projFoldAll' type='button' style='border:none;background:none;min-height:44px;padding:8px 2px;color:" + PROJ_COLOR + ";font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;touch-action:manipulation'>" +
+    (anyOpen ? "Collapse all &#x25B2;" : "Expand all &#x25BC;") + "</button></div>";
+  html += secHtml;
   el.innerHTML = html;
 
   document.getElementById("projBack").addEventListener("click", function(){ _projView = "list"; _projOpenId = null; _projReorderId = null; renderProjects(); window.scrollTo(0, 0); });
@@ -6658,6 +6704,11 @@ function renderProjectDetail() {
   el.querySelectorAll(".proj-tick").forEach(function(b){
     b.addEventListener("click", function(){ projToggleTask(p.id, +b.dataset.iid); });
   });
+  el.querySelectorAll(".proj-fold").forEach(function(b){
+    b.addEventListener("click", function(){ projSetFolds(p.id, [b.dataset.sec], b.getAttribute("aria-expanded") === "true"); renderProjects(); });
+  });
+  var fa = document.getElementById("projFoldAll");
+  if (fa) fa.addEventListener("click", function(){ projSetFolds(p.id, secKeys, anyOpen); renderProjects(); });   // the Lists rule: any open → collapse all
   var ro = document.getElementById("projReorder");
   if (ro) ro.addEventListener("click", function(){ _projReorderId = reordering ? null : p.id; renderProjects(); });
   el.querySelectorAll(".proj-move").forEach(function(b){
@@ -17184,6 +17235,7 @@ function buildExportPayload() {
   //  fl4_last_cloudbackup, fl4_tomb_* (sync deletion tombstones),
   //  fl4_mealplan_prompted (device-local weekly roll-over banner marker, v362),
   //  fl4_pullup_open (v482: which Pull-up Plan session is expanded, device UI),
+  //  fl4_proj_folds (v516: which Projects detail sections are folded, device UI),
   //  fl4_recipe_opens (v506: per-device recipe open counts for the Favourites order),
   //  fl4_tidy_undo (v366: device-local single-slot receipt for putting a recipe
   //   tidy back; a short-lived safety net, deliberately not version history).
