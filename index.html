@@ -1073,7 +1073,7 @@ li.rcp-done.rcp-ing{text-decoration:line-through}
     </div>
     <div class="home-week-strip" id="homeWeekStrip"></div>
 
-    <div style="text-align:center;margin-top:20px;font-size:11px;color:#C8BEA8;font-weight:600;letter-spacing:.4px" id="appVersionLabel">v513 · 06/11/2026</div>
+    <div style="text-align:center;margin-top:20px;font-size:11px;color:#C8BEA8;font-weight:600;letter-spacing:.4px" id="appVersionLabel">v514 · 07/11/2026</div>
 
   </div>
 </div>
@@ -21740,6 +21740,24 @@ function playChime(){
     });
   }catch(e){}
 }
+// v514: one soft, low single tone at the halfway point of a long timed hold
+// (yoga pose or physio hold of HALFWAY_MIN_SEC or more). Deliberately a single
+// quiet note, not the 3-note end chime, so it never reads as "pose over".
+var HALFWAY_MIN_SEC = 60;
+function isHalfwayTick(dur, remaining) {
+  return dur >= HALFWAY_MIN_SEC && remaining === Math.floor(dur/2);
+}
+function playHalfwayTone(){
+  try{
+    var ctx=new(window.AudioContext||window.webkitAudioContext)();
+    var o=ctx.createOscillator(),g=ctx.createGain();
+    o.connect(g);g.connect(ctx.destination);o.type='sine';o.frequency.value=440;
+    var t=ctx.currentTime;
+    g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(0.12,t+0.04);
+    g.gain.exponentialRampToValueAtTime(0.001,t+0.6);
+    o.start(t);o.stop(t+0.6);
+  }catch(e){}
+}
 
 // ── Program data ──────────────────────────────────────────
 // v446: reviewed against the precise history — a 4 cm hiatus hernia, mild bilateral L5/S1
@@ -22771,6 +22789,7 @@ function startYogaTimer() {
     // Update progress bar
     var elapsed = flow.slice(0,SS.yPoseIdx).reduce(function(a,p){return a+p.dur;},0)+(pose.dur-SS.yTime);
     document.getElementById("sesProgFill").style.width = Math.min(elapsed/yogaFlowTotal(SS.yFlow)*100,100)+"%";
+    if (isHalfwayTick(pose.dur, SS.yTime)) playHalfwayTone();
 
     if (SS.yTime <= 0) {
       clearST();
@@ -23010,6 +23029,8 @@ function togglePhysioTimer() {
         var R=54,circ=2*Math.PI*R,pct=SS.pTime/ex.dur;
         var circle=svg.querySelectorAll("circle")[1]; if(circle) circle.setAttribute("stroke-dashoffset",circ*(1-pct));
       }
+      var exH=PROGRAMMES_TRAIN[SS.pProgIdx].exercises[SS.pExIdx];
+      if (exH && isHalfwayTick(exH.dur, SS.pTime)) playHalfwayTone();
       if (SS.pTime<=0) {
         clearST(); SS.pRunning=false; playChime();
         // Auto-advance to next exercise/set like the yoga flow
