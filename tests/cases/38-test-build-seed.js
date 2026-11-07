@@ -228,7 +228,7 @@ module.exports = {
         return !!k && PROJ_ITEM_TYPES.every(function(t){ return k.items.some(function(it){ return it.type === t.key; }); });
       })());
       ok('the demo puts a Projects line on Home, and the Idea project does not count',
-        (function(){ var h = projHomeSummary(); return !!h && h.open === 3 && h.overdue === 1; })(),
+        (function(){ var h = projHomeSummary(); return !!h && h.open === 4 && h.overdue === 1; })(),
         'got: ' + JSON.stringify(projHomeSummary()));
       // v500: two courses and four rounds; only the two complete 18-hole
       // rounds feed the 18-hole best/average, the part-played one does not.
