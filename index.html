@@ -1073,7 +1073,7 @@ li.rcp-done.rcp-ing{text-decoration:line-through}
     </div>
     <div class="home-week-strip" id="homeWeekStrip"></div>
 
-    <div style="text-align:center;margin-top:20px;font-size:11px;color:#C8BEA8;font-weight:600;letter-spacing:.4px" id="appVersionLabel">v516 · 07/11/2026</div>
+    <div style="text-align:center;margin-top:20px;font-size:11px;color:#C8BEA8;font-weight:600;letter-spacing:.4px" id="appVersionLabel">v517 · 09/11/2026</div>
 
   </div>
 </div>
@@ -26999,7 +26999,9 @@ function forceAppUpdate() {
 if ("serviceWorker" in navigator && !_isPreview && !_isTestBuild) {
   renderSwVersionInfo();   // paint "Running vNNN" before any worker reports in
   navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).then(function(reg) {
-    reg.update(); // background check; a new build announces itself via SW_UPDATED
+    // .catch (v517): the check rejects with no signal, or when the worker is removed mid-check
+    // (Clear & reinstall). Nothing to do about either; the next open checks again.
+    reg.update().catch(function(){}); // background check; a new build announces itself via SW_UPDATED
     if (navigator.serviceWorker.controller) {
       navigator.serviceWorker.controller.postMessage({ type: "GET_VERSION" });
     }
