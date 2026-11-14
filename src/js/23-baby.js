@@ -4,6 +4,7 @@ function getBD() {
   if (!Array.isArray(d.growth))     d.growth     = [];
   if (!Array.isArray(d.medicine))   d.medicine   = [];
   if (!Array.isArray(d.milestones)) d.milestones = [];
+  if (!Array.isArray(d.temps))      d.temps      = [];   // v519 temperature readings
   if (!d.teeth || typeof d.teeth !== "object") d.teeth = {};
   if (!d.bottles || typeof d.bottles !== "object") d.bottles = {};
   return d;
@@ -110,6 +111,9 @@ function applyHousehold(data) {
   if (isSynced("baby") && data["bagitems_deleted"] && typeof data["bagitems_deleted"] === "object") {  // v478
     storeSet("fl4_tomb_bagitems", purgeTombs(mergeTombs(getTombs("bagitems"), data["bagitems_deleted"])));
   }
+  if (isSynced("baby") && data["btemp_deleted"] && typeof data["btemp_deleted"] === "object") {        // v519
+    storeSet("fl4_tomb_btemp", purgeTombs(mergeTombs(getTombs("btemp"), data["btemp_deleted"])));
+  }
   if (isSynced("baby") && data["baby"] && typeof data["baby"] === "object") {
     // v329: was a top-level Object.assign (v296) — remote's medicine/growth/
     // milestones/teeth WHOLESALE-replaced the local collections, so a dose
@@ -117,7 +121,7 @@ function applyHousehold(data) {
     // silently dropped. Now the same per-entry merge the personal channel
     // runs (mergeBabyData), incl. medicine tombstones. (v371: growth +
     // milestones now get the same per-entry merge + tombstones.)
-    storeSet("fl4_baby", mergeBabyData(getBD(), data["baby"], getTombs("med"), getTombs("growth"), getTombs("ms"), getTombs("bags"), getTombs("bagitems")));
+    storeSet("fl4_baby", mergeBabyData(getBD(), data["baby"], getTombs("med"), getTombs("growth"), getTombs("ms"), getTombs("bags"), getTombs("bagitems"), getTombs("btemp")));
     _rDirty.baby = true;
   }
   // Recipe book — merge by id with NEWEST-WINS (by `updated` timestamp), so a
@@ -309,11 +313,13 @@ function renderBabyView() {
   });
   document.getElementById("babyGrowthView").style.display     = currentBabyView === "growth"     ? "" : "none";
   document.getElementById("babyMedicineView").style.display   = currentBabyView === "medicine"   ? "" : "none";
+  document.getElementById("babyTempView").style.display       = currentBabyView === "temp"       ? "" : "none";
   document.getElementById("babyMilestonesView").style.display = currentBabyView === "milestones" ? "" : "none";
   document.getElementById("babyTeethView").style.display      = currentBabyView === "teeth"      ? "" : "none";
   document.getElementById("babyBagsView").style.display       = currentBabyView === "bags"       ? "" : "none";
   if (currentBabyView === "growth")     renderGrowth();
   if (currentBabyView === "medicine")   renderMedicine();
+  if (currentBabyView === "temp")       renderBabyTemp();
   if (currentBabyView === "milestones") renderMilestones();
   if (currentBabyView === "teeth")      renderTeeth();
   if (currentBabyView === "bags")       renderBagView();

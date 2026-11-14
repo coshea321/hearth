@@ -499,7 +499,10 @@ function pushPersonal() {
   clearTimeout(_pushPersonalTimer);
   _pushPersonalTimer = setTimeout(function() {
 var d = {};
-  d.health = getWD();
+  // v519: workouts/bodyweight/BP/temps travel as `workouts`. They used to go
+  // as `health`, which the fl4_health line further down overwrote, so they
+  // never reached another device. Do NOT move them back under `health`.
+  d.workouts = getWD();
   ["grocery","todo","travel","personal"].forEach(function(lt) {
     var ld = listData[lt], notes = storeGet("fl4_notes_" + lt) || [];
     if (ld) d["list_" + lt] = { items:ld.items, hist:ld.hist, notes:notes, customCats:getCustomCats(lt), deleted:purgeTombs(getTombs(lt)), histDeleted:purgeTombs(getTombs(histTombKey(lt))) };
@@ -528,6 +531,7 @@ var d = {};
   d.ms_deleted  = purgeTombs(getTombs("ms"));
   d.bags_deleted = purgeTombs(getTombs("bags"));            // v478
   d.bagitems_deleted = purgeTombs(getTombs("bagitems"));    // v478
+  d.btemp_deleted = purgeTombs(getTombs("btemp"));          // v519
   d.recipebook  = storeGet("fl4_recipebook") || [];
   d.rb_deleted  = purgeTombs(getTombs("recipes"));
   d.mealplan    = storeGet("fl4_mealplan") || [];
@@ -595,7 +599,7 @@ function flushSyncRenders(dirty) {
   // Log click handler (medHistoryFor), so the advisory is computed when Log is
   // pressed and is never stale — only the displayed panel is, and it refreshes
   // on the next sync after logging.
-  if (dirty.baby    && currentSection === "baby" && !medDraftOpen())     safeRender("baby",    renderBabyView);
+  if (dirty.baby    && currentSection === "baby" && !medDraftOpen() && !tempDraftOpen()) safeRender("baby", renderBabyView);
   // Lists: unchanged except for the section guard. switchSection() re-renders
   // the list on entry, so skipping it while hidden can't leave a stale view.
   if (dirty.list    && currentSection === "lists")                      safeRender("list",    renderList);
@@ -613,9 +617,15 @@ function applyPersonal(d) {
   try {
 
   // ── Workouts: merge by workout ID, not last-write-wins ───────────────────
-  if (d.health && typeof d.health === "object") {
+  // v519: read `workouts` (see pushPersonal). `health` is the fl4_health ARRAY
+  // since v449 — taking it as workouts copied its records into fl4_workouts
+  // as "0","1",… keys, which the merge below now strips.
+  // A non-array `health` is the pre-v449 shape (workouts under `health`), still accepted.
+  function _isWD(x){ return !!(x && typeof x === "object" && !Array.isArray(x)); }
+  var _remoteWD = _isWD(d.workouts) ? d.workouts : (_isWD(d.health) ? d.health : null);
+  if (_remoteWD) {
     var localWD  = getWD();
-    var remoteWD = d.health;
+    var remoteWD = _remoteWD;
     var localWkts  = Array.isArray(localWD.workouts)  ? localWD.workouts  : [];
     var remoteWkts = Array.isArray(remoteWD.workouts) ? remoteWD.workouts : [];
     var wIdx = {};
@@ -630,16 +640,23 @@ function applyPersonal(d) {
     var bpIdx = {};
     (Array.isArray(remoteWD.bp) ? remoteWD.bp : []).forEach(function(e){ if(e && e.ts) bpIdx[e.ts] = e; });
     (Array.isArray(localWD.bp)  ? localWD.bp  : []).forEach(function(e){ if(e && e.ts) bpIdx[e.ts] = e; });
+    // v519: temperatures (Me / My wife — the daughter's live in fl4_baby.temps) merge like BP, by person+ts
+    var tpIdx = {};
+    (Array.isArray(remoteWD.temps) ? remoteWD.temps : []).forEach(function(e){ if(e && e.ts) tpIdx[trackPersonOf(e)+":"+e.ts] = e; });
+    (Array.isArray(localWD.temps)  ? localWD.temps  : []).forEach(function(e){ if(e && e.ts) tpIdx[trackPersonOf(e)+":"+e.ts] = e; });
     // v352: base was remoteWD alone, so a local-only key the remote copy
     // didn't have yet was wiped (fix-queue batch A, finding 12). Base on
     // remoteWD+localWD (remote first, local overwrites — same precedence as
     // the workouts/bodyweight/bp merges above) so unknown keys carry through
     // from whichever side has them.
-    storeSet("fl4_workouts", Object.assign({}, remoteWD, localWD, {
+    var mergedWD = Object.assign({}, remoteWD, localWD, {
       workouts: Object.values(wIdx).sort(function(a,b){ return (b.date||"").localeCompare(a.date||""); }),
       bodyweight: Object.values(bwIdx).sort(function(a,b){ return (b.date||"").localeCompare(a.date||""); }),
-      bp: Object.values(bpIdx).sort(function(a,b){ return (b.ts||0)-(a.ts||0); })
-    }));
+      bp: Object.values(bpIdx).sort(function(a,b){ return (b.ts||0)-(a.ts||0); }),
+      temps: Object.values(tpIdx).sort(function(a,b){ return (b.ts||0)-(a.ts||0); })
+    });
+    Object.keys(mergedWD).forEach(function(k){ if (/^\d+$/.test(k)) delete mergedWD[k]; });
+    storeSet("fl4_workouts", mergedWD);
   }
 
   // ── Lists: merge remote + local by item ID (union, no overwrites) ─────────
@@ -902,8 +919,11 @@ function applyPersonal(d) {
   if (d.bagitems_deleted && typeof d.bagitems_deleted === "object") {  // v478
     storeSet("fl4_tomb_bagitems", purgeTombs(mergeTombs(getTombs("bagitems"), d.bagitems_deleted)));
   }
+  if (d.btemp_deleted && typeof d.btemp_deleted === "object") {        // v519
+    storeSet("fl4_tomb_btemp", purgeTombs(mergeTombs(getTombs("btemp"), d.btemp_deleted)));
+  }
   if (d.baby && typeof d.baby === "object") {
-    storeSet("fl4_baby", mergeBabyData(getBD(), d.baby, getTombs("med"), getTombs("growth"), getTombs("ms"), getTombs("bags"), getTombs("bagitems")));
+    storeSet("fl4_baby", mergeBabyData(getBD(), d.baby, getTombs("med"), getTombs("growth"), getTombs("ms"), getTombs("bags"), getTombs("bagitems"), getTombs("btemp")));
     _rDirty.baby = true;
   }
 
@@ -977,13 +997,14 @@ var data = {};
   }
   if (isSynced("baby")) {
     var bd = getBD();
-    if ((bd.growth||[]).length || (bd.medicine||[]).length || (bd.milestones||[]).length || Object.keys(bd.teeth||{}).length || Object.keys(bd.bottles||{}).length || (bd.bags||[]).length)
+    if ((bd.growth||[]).length || (bd.medicine||[]).length || (bd.milestones||[]).length || (bd.temps||[]).length || Object.keys(bd.teeth||{}).length || Object.keys(bd.bottles||{}).length || (bd.bags||[]).length)
       data["baby"] = bd;   // v478: bags added to the guard -- a household whose Baby section held ONLY bags never pushed them at all
     data["med_deleted"] = purgeTombs(getTombs("med")); // outside the non-empty guard: a delete of the LAST dose must still propagate
     data["growth_deleted"] = purgeTombs(getTombs("growth"));
     data["ms_deleted"] = purgeTombs(getTombs("ms"));
     data["bags_deleted"] = purgeTombs(getTombs("bags"));           // v478, same reasoning
     data["bagitems_deleted"] = purgeTombs(getTombs("bagitems"));
+    data["btemp_deleted"] = purgeTombs(getTombs("btemp"));         // v519
   }
   // Recipe book is shared household-wide (merge-by-id on the receiving side).
   data["recipebook"] = storeGet("fl4_recipebook") || [];

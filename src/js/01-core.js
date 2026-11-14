@@ -567,7 +567,7 @@ function mergeBags(local, remote, bagTombs, itemTombs) {
     return !(ts != null && ts >= bag.updated);
   });
 }
-function mergeBabyData(local, remote, medTombs, growthTombs, msTombs, bagTombs, bagItemTombs) {
+function mergeBabyData(local, remote, medTombs, growthTombs, msTombs, bagTombs, bagItemTombs, tempTombs) {
   // v371: generalised from the old mergeMedicine (v329) — medicine and
   // milestones share the same shape (id-keyed, `updated` stamp falling back
   // to `id` for pre-migration entries). Growth keeps its own date-keyed
@@ -609,6 +609,7 @@ function mergeBabyData(local, remote, medTombs, growthTombs, msTombs, bagTombs, 
     growth:     mergeDateKeyed(local.growth,   remote.growth,     growthTombs),
     medicine:   mergeIdKeyed(local.medicine,   remote.medicine,   medTombs),
     milestones: mergeIdKeyed(local.milestones, remote.milestones, msTombs),
+    temps:      mergeIdKeyed(local.temps,      remote.temps,      tempTombs),   // v519: same id-keyed shape as medicine
     teeth:      Object.assign({}, local.teeth||{}, remote.teeth||{}),
     bottles:    mergeBottles(local.bottles,   remote.bottles),
     bags:       mergeBags(local.bags, remote.bags, bagTombs, bagItemTombs)

@@ -549,6 +549,12 @@ body.train-mode #toast{background:#3A3328}
 /* Body weight */
 .bw-card{background:#fff;border-radius:12px;padding:14px;margin-bottom:13px;border:1px solid #E0DCD4}
 .bw-card-title{font-family:Georgia,serif;font-size:16px;font-weight:600;color:#2A2010;margin-bottom:12px}
+/* v519: collapsible Track → Body cards (applyBodyFolds) */
+#trainBodyView .bw-card[data-fold]>.bw-card-title{cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none}
+#trainBodyView .bw-card[data-fold]>.bw-card-title::after{content:"\25BE";margin-left:auto;padding-left:8px;color:#A89A80;font-size:14px;float:right}
+#trainBodyView .bw-card[data-fold].folded>.bw-card-title::after{content:"\25B8"}
+#trainBodyView .bw-card.folded>.bw-card-title{margin-bottom:0}
+#trainBodyView .bw-card.folded>:not(.bw-card-title){display:none!important}
 .bw-input-row{display:flex;gap:8px;align-items:center}
 .bw-input{flex:1;border:1.5px solid #E0DCD4;border-radius:9px;padding:11px 12px;background:#FDFAF3;color:#2A2010;font-family:inherit;font-size:18px;text-align:center;outline:none;transition:border-color .15s}
 .bw-input:focus{border-color:#3B6FE0}
