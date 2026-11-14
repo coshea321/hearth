@@ -77,16 +77,16 @@ module.exports = {
       ok('merge: partner-only reading is added', merged.temps.some(function(x){ return x.id === 123; }), 'got: ' + JSON.stringify(merged.temps));
 
       // ── Collapsible Body cards ──
-      var card = document.querySelector('#trainBodyView .bw-card[data-fold="bplog"]');
+      var card = document.querySelector('#trainBodyView .bw-card[data-fold="bp"]');
       card.querySelector('.bw-card-title').click();
       ok('fold: card folds on title tap', card.classList.contains('folded'), card.className);
       ok('fold: content hidden', getComputedStyle(document.getElementById('bpLogBtn')).display === 'none', 'still visible');
       renderTrackView();
-      ok('fold: survives a re-render', document.querySelector('#trainBodyView .bw-card[data-fold="bplog"]').classList.contains('folded'), 'lost');
-      var tempCard = document.querySelector('#trainBodyView .bw-card[data-fold="temp-hist"]');
-      ok('fold: temperature cards are foldable', !!tempCard, 'no temp-hist card');
-      document.querySelector('#trainBodyView .bw-card[data-fold="bplog"] .bw-card-title').click();
-      ok('fold: tap again unfolds', !document.querySelector('#trainBodyView .bw-card[data-fold="bplog"]').classList.contains('folded'), 'still folded');
+      ok('fold: survives a re-render', document.querySelector('#trainBodyView .bw-card[data-fold="bp"]').classList.contains('folded'), 'lost');
+      var tempCard = document.querySelector('#trainBodyView .bw-card[data-fold="temp-"]');
+      ok('fold: temperature cards are foldable', !!tempCard, 'no temp card');
+      document.querySelector('#trainBodyView .bw-card[data-fold="bp"] .bw-card-title').click();
+      ok('fold: tap again unfolds', !document.querySelector('#trainBodyView .bw-card[data-fold="bp"]').classList.contains('folded'), 'still folded');
 
       // ── Incoming sync must not wipe a half-entered Baby → Temp reading ──
       switchSection('baby');
