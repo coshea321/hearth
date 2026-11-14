@@ -23,8 +23,11 @@ continuing:
    DD/MM/YYYY. Format is exactly `vNNN · DD/MM/YYYY` — date only, no time.
    If the working tree has already been bumped this session, don't bump
    twice — verify and continue.
-2. **Bump both files.** Edit the one-line `VERSION` constant in `sw.js` and
-   the `appVersionLabel` div in `index.html` to the same new string.
+2. **Bump both files, then build.** Edit the one-line `VERSION` constant in
+   `sw.js` and the `appVersionLabel` div in **`src/index.html`** to the same
+   new string — never the root `index.html`, which is build output. Then run
+   `node build.js` so the committed root `index.html` picks up the bump and
+   every other `src/` edit. (`tests/checks.sh` fails if you forget.)
 3. **Update the docs (three files).**
    - `docs/HEARTH-changelog.md` — new entry at the top, **capped at ~150 words**
      plus a headline sentence and every "do NOT simplify this into X"
@@ -37,11 +40,12 @@ continuing:
    - `docs/HEARTH-backlog.md` — strike through what this closed, add what it
      opened.
 4. **Run `tests/checks.sh` and `node tests/run.js`** — expect exit 0 from
-   both — then grep-confirm the strings you edited actually landed. Any
+   both — then grep-confirm the strings you edited actually landed in
+   `src/`. Any
    failure means stop and report; do not commit. (`tests/checks.sh` is the
    same script CI runs, so a green run here means a green run on the PR.
    The `hearth-verifier` subagent does these three things and is optional.)
-5. **Commit** everything with message `vNNN: <summary>`.
+5. **Commit** everything — `src/` AND the rebuilt root `index.html` — with message `vNNN: <summary>`.
 6. **Push** with `git push -u origin <current-branch>`; on network errors
    retry up to 4 times with backoff (2s/4s/8s/16s). Never push to `main`.
 7. **Open the PR immediately** with the available pull-request tool, base

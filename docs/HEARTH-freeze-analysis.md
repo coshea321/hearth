@@ -94,5 +94,5 @@ then add the update/hang scenarios from claim 8's verdict. Built as a second pha
 this file about why the "localhost" wording had to change, and the v376 changelog entry for the two
 measurement traps that made an earlier draft of the offline test pass against a network-first shell.
 
-**Explicitly not recommended:** splitting index.html (rejected 02/07/2026 triage — don't re-open);
+**Explicitly not recommended:** ~~splitting index.html (rejected 02/07/2026 triage — don't re-open)~~ — *re-opened by Cathal 14/11/2026 and shipped v518 as a source-only split: still ONE shipped file, so nothing in this analysis changes;*
 removing the 3.5s lie-fi cap without Release B's decision; any change that drops the update banner.

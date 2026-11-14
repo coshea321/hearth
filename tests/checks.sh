@@ -36,6 +36,24 @@ else BASE_REF="$RAW_BASE"; fi
 
 echo "Hearth mechanical checks (base: $RAW_BASE -> $BASE_REF)"
 
+# --- 0. Built file is current (source split, v518) --------------------------
+# The app is AUTHORED in src/ and SHIPPED as the root index.html, which is
+# committed (no build on Cloudflare). Rebuild to a temp path and require it to
+# match byte for byte: a mismatch means someone edited src/ without running
+# `node build.js`, or hand-edited the built file. build.js itself fails if a
+# src/css or src/js file is never included, included twice, or missing — so
+# "every source file is in the build exactly once" is enforced here too.
+# Every check below runs on the root index.html, so it must be current first.
+BUILT=$(mktemp)
+if ! node build.js "$BUILT" >/dev/null 2>/tmp/hearth-build.err; then
+  err "node build.js failed: $(cat /tmp/hearth-build.err)"
+elif cmp -s "$BUILT" index.html; then
+  ok "index.html matches a fresh build of src/"
+else
+  err "index.html does not match a fresh build of src/ — the built file is stale or hand-edited. Edit src/, run 'node build.js', commit both."
+fi
+rm -f "$BUILT"
+
 # --- 1. Syntax-check the main inline script block --------------------------
 # From the "// PREVIEW MODE" comment to the FIRST </script> AT OR AFTER it.
 # NOT the first </script> in the file — the DOMPurify <script src> tag closes
@@ -73,6 +91,14 @@ else
   # which does not match the regex.
   err "in-file version label count is $VCOUNT, expected 1 — matches on lines: $(grep -nE 'v[0-9]{3} · [0-9]{2}/[0-9]{2}/[0-9]{4}' index.html | cut -d: -f1 | tr '\n' ' ')"
 fi
+# Same rule over the sources: the label's one real home is src/index.html,
+# and a stray copy in any src/ file would also land in the built file.
+SVCOUNT=$(grep -rhoE 'v[0-9]{3} · [0-9]{2}/[0-9]{2}/[0-9]{4}' src | wc -l)
+if [ "$SVCOUNT" = "1" ] && grep -qE 'v[0-9]{3} · [0-9]{2}/[0-9]{2}/[0-9]{4}' src/index.html; then
+  ok "exactly one version label in src/ (in src/index.html)"
+else
+  err "src/ version label count is $SVCOUNT (expected 1, in src/index.html) — matches: $(grep -rnE 'v[0-9]{3} · [0-9]{2}/[0-9]{2}/[0-9]{4}' src | cut -d: -f1,2 | tr '\n' ' ')"
+fi
 
 tail -c 40 index.html | tr -d '[:space:]' | grep -q '</body></html>$' \
   && ok "clean EOF (</body></html>)" \
@@ -100,14 +126,16 @@ HTMLV=$(grep -oE 'v[0-9]{3} · [0-9]{2}/[0-9]{2}/[0-9]{4}' index.html | head -1)
   && ok "version matches across sw.js and index.html ($SWV)" \
   || err "version mismatch: sw.js '$SWV' vs index.html '$HTMLV'"
 
-if git diff --quiet "$BASE_REF" -- index.html sw.js; then
+# src/ is in the list so a source-only change can't skip the bump (check 0
+# already forces the built file to follow, but this must not rely on that).
+if git diff --quiet "$BASE_REF" -- index.html sw.js src build.js; then
   ok "app files unchanged vs $BASE_REF - bump check skipped"
 else
   BASEV=$(git show "$BASE_REF:sw.js" | grep -oE 'v[0-9]{3}' | head -1)
   if [ "$((10#${SWV:1:3}))" -gt "$((10#${BASEV:1:3}))" ]; then
     ok "version bumped: $BASEV -> ${SWV%% *}"
   else
-    err "index.html/sw.js changed but version not bumped ($BASEV -> ${SWV%% *})"
+    err "index.html/sw.js/src/build.js changed but version not bumped ($BASEV -> ${SWV%% *})"
   fi
 fi
 
@@ -124,6 +152,11 @@ dose_pin "$(grep -cF 'Math.floor((w*mgkg*5/mg5)*4)/4' index.html)" "dose formula
 [ "$(grep -c 'check the leaflet' index.html)" -ge "4" ] \
   && ok "dosing pin: 'check the leaflet' wording present (>=4)" \
   || err "'check the leaflet' safety wording count dropped below 4"
+# INFORMATIONAL ONLY: the dosing code lives in its own source file, so a PR
+# that touches it says so in every Checks block. The pins above still guard it.
+if ! git diff --quiet "$BASE_REF" -- src/js/24-medicine.js 2>/dev/null; then
+  echo "  note this change touches src/js/24-medicine.js (medicine dosing) — safety-sensitive, see CLAUDE.md"
+fi
 
 # --- 6. Duplicate top-level function names ---------------------------------
 # A hoisting-shadowed duplicate is a silent no-op no test can see, but a grep
