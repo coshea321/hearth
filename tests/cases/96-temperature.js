@@ -102,12 +102,12 @@ module.exports = {
       dt.value = '2026-01-01T03:00';
       ok('draft guard: a changed time alone is a draft', tempDraftOpen() === true, 'false');
 
-      // ── Received payload: `workouts` carries temps; the fl4_health array under `health` never pollutes workouts ──
+      // ── Received payload: workouts carries temps; the fl4_health array under health never pollutes workouts ──
       var wd0 = getWD(); wd0.temps = []; saveWD(wd0);
       applyPersonal({ workouts: { workouts: [], bodyweight: [], bp: [], temps: [{ ts: 1700000000000, date: '2023-11-14', temp: 37.3, method: '', note: '', person: 'wife' }] },
                       health: [{ id: 'h1', kind: 'visit', title: 'x', updated: 1 }] });
       var wd1 = getWD();
-      ok('applyPersonal: remote temps merged from `workouts`', (wd1.temps || []).some(function(t){ return t.ts === 1700000000000 && t.person === 'wife'; }), 'got: ' + JSON.stringify(wd1.temps));
+      ok('applyPersonal: remote temps merged from workouts', (wd1.temps || []).some(function(t){ return t.ts === 1700000000000 && t.person === 'wife'; }), 'got: ' + JSON.stringify(wd1.temps));
       ok('applyPersonal: no "0","1"… keys from the health array', !Object.keys(wd1).some(function(k){ return /^\\d+$/.test(k); }), 'keys: ' + Object.keys(wd1).join(','));
 
       document.getElementById('trackPerson').value = 'me';
