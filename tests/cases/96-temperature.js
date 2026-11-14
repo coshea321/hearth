@@ -85,6 +85,7 @@ module.exports = {
       ok('fold: survives a re-render', document.querySelector('#trainBodyView .bw-card[data-fold="bp"]').classList.contains('folded'), 'lost');
       var tempCard = document.querySelector('#trainBodyView .bw-card[data-fold="temp-"]');
       ok('fold: temperature cards are foldable', !!tempCard, 'no temp card');
+      ok('fold: log and history are one card', !!document.querySelector('#trainBodyView .bw-card[data-fold="bp"] #bpChart') && !!document.querySelector('#trainBodyView .bw-card[data-fold="bw"] #bwHistory'), 'chart/history outside the log card');
       document.querySelector('#trainBodyView .bw-card[data-fold="bp"] .bw-card-title').click();
       ok('fold: tap again unfolds', !document.querySelector('#trainBodyView .bw-card[data-fold="bp"]').classList.contains('folded'), 'still folded');
 
