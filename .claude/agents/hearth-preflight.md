@@ -46,7 +46,8 @@ attempt the rest, then report.
 ### 2. Current version state
 - Read the `VERSION` constant in `sw.js` (single source of truth),
   e.g. `v308 · 03/07/2026`.
-- Confirm `index.html` contains the same version string.
+- Confirm `src/index.html` (where the label is authored) and the built
+  `index.html` both contain the same version string.
 - Read the top entry of `docs/HEARTH-changelog.md` and the "Current version" line
   in `docs/HEARTH-notes.md`, and report both. Flag any mismatch against sw.js —
   it means the last session didn't sync the docs, and the main session
@@ -71,8 +72,9 @@ attempt the rest, then report.
 
 ### 4. Does it already exist? (only if given feature keywords)
 Features have been accidentally rebuilt in this repo. If the invoking
-prompt names the feature being built or changed, grep `index.html` (and
-`sw.js` if relevant) for likely identifiers: the feature name, obvious
+prompt names the feature being built or changed, grep `src/` (and
+`sw.js` if relevant; report `src/...:line` anchors, never lines in the
+built root `index.html`) for likely identifiers: the feature name, obvious
 function-name guesses (e.g. `renderX`), related UI strings. Report every
 hit with line numbers and a one-line summary of what appears to exist
 already. Report "no trace found" only after searching multiple plausible

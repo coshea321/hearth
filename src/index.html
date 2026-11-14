@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="robots" content="noindex, nofollow">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#1C0A04" id="themeColor">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Hearth">
+<link rel="manifest" href="manifest.json">
+<title>Hearth</title>
+<style>
+<!--@include css/app.css-->
+</style>
+  <!-- DOMPurify 3.0.8, vendored locally (v289) — was a jsdelivr CDN load; the exact npm-published minified build -->
+  <script src="purify.min.js"></script>
+</head>
+<body>
+
+<!-- Boot splash (v312; non-blocking since v373): covers everything only
+     while the main script parses and boots — it hides the moment the app
+     is ready, never waiting on the network. Inline styles so it paints
+     before any CSS/JS. Matches the Android launch screen (#1C0A04). -->
+<div id="bootSplash" style="position:fixed;inset:0;z-index:9998;background:#1C0A04;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;transition:opacity .18s ease">
+  <img src="icon-192.png" width="96" height="96" style="border-radius:22px" alt="Hearth">
+  <div style="display:flex;gap:8px">
+    <span class="bs-dot" style="animation-delay:0s"></span>
+    <span class="bs-dot" style="animation-delay:.2s"></span>
+    <span class="bs-dot" style="animation-delay:.4s"></span>
+  </div>
+  <div id="bootSplashMsg" style="color:#C8BEA8;font-size:13px;font-weight:600;letter-spacing:.4px;min-height:16px"></div>
+</div>
+<style>
+.bs-dot{width:8px;height:8px;border-radius:50%;background:#C8BEA8;opacity:.25;animation:bsPulse 1.2s infinite ease-in-out}
+@keyframes bsPulse{0%,100%{opacity:.25}40%{opacity:.9}}
+</style>
+<script>
+// ── Boot splash failsafe (v356; ceiling lowered v373) ──────────────────
+// Every path that hides #bootSplash lives at the BOTTOM of the one giant
+// inline script. So anything that stops that script from reaching the
+// bottom (an uncaught throw ~12,000 lines up) would leave the splash
+// covering the app forever: the reported "stuck on the loading screen
+// until I close and reopen it".
+// This block runs at parse time, before that script exists, so nothing in
+// it can disable this ceiling. Since v373 the main script hides the splash
+// the moment it finishes booting (no update-wait), so the ceiling only
+// needs to outlast parse+boot on a slow phone — 8s, down from 12s.
+(function(){
+  var HARD_MS = 8000;    // well above worst observed parse+boot time
+  var ERR_MS  = 1500;    // boot threw before the gate armed — reveal quickly
+
+  window.__hearthSplashGone = false;
+
+  window.__hearthSplashHide = function() {
+    if (window.__hearthSplashGone) return;
+    window.__hearthSplashGone = true;
+    if (window.__hearthSplashTimer) { clearTimeout(window.__hearthSplashTimer); window.__hearthSplashTimer = null; }
+    var s = document.getElementById("bootSplash");
+    if (s) {
+      s.style.opacity = "0";
+      setTimeout(function(){ s.style.display = "none"; }, 200);
+    }
+    // Keep the main gate's own flag in sync so it can't reload behind a
+    // splash that is already gone (hook is defined once the gate parses).
+    if (typeof window.__hearthSplashGoneHook === "function") {
+      try { window.__hearthSplashGoneHook(); } catch (e) {}
+    }
+  };
+
+  window.__hearthSplashTimer = setTimeout(window.__hearthSplashHide, HARD_MS);
+
+  // Restored from the back-forward cache: no script re-runs, so the gate
+  // never gets another chance to hide a splash left up by the last visit.
+  window.addEventListener("pageshow", function(e){
+    if (e.persisted) window.__hearthSplashHide();
+  });
+
+  // An uncaught error before the gate armed means the deadline timer will
+  // never exist — don't make the user wait out the full ceiling for it.
+  window.addEventListener("error", function(){
+    if (window.__hearthBootGateArmed) return;
+    setTimeout(function(){
+      if (!window.__hearthBootGateArmed) window.__hearthSplashHide();
+    }, ERR_MS);
+  });
+})();
+</script>
+
+<header>
+  <div class="app-title" id="appTitle">🔥 Hearth</div>
+  <div class="hdr-badge" id="hdrBadge"></div>
+  <span id="hdrUser" style="font-size:11px;color:rgba(255,255,255,.55);font-weight:600;letter-spacing:.3px;white-space:nowrap;overflow:hidden;max-width:80px;text-overflow:ellipsis"></span>
+  <!-- v496: each section's actions live in the header (was a coloured bar under it). switchSection shows the matching .hdr-act. -->
+  <div class="hdr-act" data-sec="recipes"><button class="hdr-btn hdr-add" id="recipeNewBtn" aria-label="New recipe" title="New recipe">+</button><button class="hdr-btn hdr-more" data-tools="recipes" aria-label="More recipe actions" title="More">&#x22EF;</button></div>
+  <div class="hdr-act" data-sec="trips"><button class="hdr-btn hdr-add" id="tripNewBtn" aria-label="New trip" title="New trip">+</button><button class="hdr-btn hdr-more" data-tools="trips" aria-label="More trip actions" title="More">&#x22EF;</button></div>
+  <div class="hdr-act" data-sec="plants"><button class="hdr-btn hdr-add" id="plantNewBtn" aria-label="New plant" title="New plant">+</button><button class="hdr-btn hdr-more" data-tools="plants" aria-label="More plant actions" title="More">&#x22EF;</button></div>
+  <div class="hdr-act" data-sec="watch"><button class="hdr-btn hdr-add" id="watchNewBtn" aria-label="Add to watchlist" title="Add to watchlist">+</button><button class="hdr-btn hdr-more" data-tools="watch" aria-label="More watchlist actions" title="More">&#x22EF;</button></div>
+  <div class="hdr-act" data-sec="appliances"><button class="hdr-btn hdr-add" id="applNewBtn" aria-label="New inventory item" title="New inventory item">+</button></div>
+  <div class="hdr-act" data-sec="health"><button class="hdr-btn hdr-add" id="hlNewBtn" aria-label="New medical record" title="New medical record">+</button></div>
+  <div class="hdr-act" data-sec="projects"><button class="hdr-btn hdr-add" id="projNewBtn" aria-label="New project" title="New project">+</button><button class="hdr-btn hdr-more" data-tools="projects" aria-label="More project actions" title="More">&#x22EF;</button></div>
+  <div class="hdr-act" data-sec="golf"><button class="hdr-btn hdr-add" id="golfNewBtn" aria-label="New golf round" title="New golf round">+</button><button class="hdr-btn hdr-more" data-tools="golf" aria-label="More golf actions" title="More">&#x22EF;</button></div>
+  <div class="hdr-act" data-sec="track"><label class="hdr-person">&#x1F464;<select id="trackPerson" aria-label="Recording for"><option value="me">Me</option><option value="wife">My wife</option><option value="daughter">My daughter</option></select></label></div>
+  <button class="hdr-btn" id="syncBtn" title="Sync" aria-label="Open sync settings">&#128257;<span class="sync-dot" id="syncDot"></span></button>
+  <button class="hdr-btn" id="settingsBtn" title="Settings" aria-label="Open app settings">&#9881;&#65039;</button>
+</header>
+<!-- v496: the section header's ⋯ opens this sheet; each group holds the rarely used buttons that used to sit in the section's action bar (same ids and handlers). -->
+<div class="overlay" id="secToolsOverlay">
+  <div class="modal-box" style="position:relative">
+    <button class="modal-close" id="secToolsClose" aria-label="Close">&#x2715;</button>
+    <div class="modal-title">More</div>
+    <div class="sec-tools" data-sec="recipes"><button id="recipeImportBtn" class="more-row"><span class="more-ico">&#x2B07;</span><span class="more-name">Import a recipe</span></button></div>
+    <div class="sec-tools" data-sec="trips"><button id="tripPackingBtn" class="more-row"><span class="more-ico">&#x2708;&#xFE0F;</span><span class="more-name">Packing list</span></button><button id="tripImportBtn" class="more-row"><span class="more-ico">&#x1F4E5;</span><span class="more-name">Import a trip</span></button></div>
+    <div class="sec-tools" data-sec="plants"><button id="plantImportBtn" class="more-row"><span class="more-ico">&#x1F4E5;</span><span class="more-name">Import a plant</span></button></div>
+    <div class="sec-tools" data-sec="projects"><button id="projImportBtn" class="more-row"><span class="more-ico">&#x1F4E5;</span><span class="more-name">Import a plan</span></button></div>
+    <div class="sec-tools" data-sec="golf"><button id="golfImportBtn" class="more-row"><span class="more-ico">&#x1F4E5;</span><span class="more-name">Import a course</span></button></div>
+    <div class="sec-tools" data-sec="watch"><button id="watchRandomBtn" class="more-row"><span class="more-ico">&#x1F3B2;</span><span class="more-name">Pick something at random</span></button></div>
+  </div>
+</div>
+
+<div id="staleDataBanner" role="alert" aria-live="assertive" style="display:none;background:#7a2a10;color:#ffd0a0;padding:9px 14px;font-size:13px;font-weight:600;text-align:center;line-height:1.4;cursor:pointer">
+  &#x26A0;&#xFE0F; Showing offline data — sync needs re-login. Tap to fix.
+</div>
+
+<div id="homeSection">
+  <div class="home-content">
+
+    <!-- Greeting -->
+    <div class="home-greeting">
+      <div class="home-greeting-line" id="homeGreeting">Good morning</div>
+      <div class="home-date-big" id="homeDateBig">Today</div>
+      <div class="home-clock-ie" id="homeClockIE" style="display:none"></div>
+    </div>
+
+    <!-- Global search (v384) — finder, not a filter; hands off to the
+         section that owns a match rather than rendering records itself.
+         See HEARTH-global-search.md for the full design record. -->
+    <div style="position:relative;margin:0 0 14px">
+      <div style="display:flex;align-items:center;gap:8px;background:#fff;border-radius:12px;padding:10px 14px;box-shadow:0 1px 4px rgba(20,50,20,.07)">
+        <span style="font-size:16px">&#x1F50D;</span>
+        <input id="homeSearchInput" type="text" aria-label="Search" placeholder="Search grocery, tasks, notes, recipes, inventory..." autocomplete="off" style="flex:1;min-width:0;border:none;outline:none;font-family:inherit;font-size:14px;background:transparent">
+        <span id="homeSearchClear" style="display:none;color:#B8AA90;font-size:15px;cursor:pointer;padding:2px 4px;touch-action:manipulation">&#x2715;</span>
+      </div>
+      <div id="homeSearchResults" style="display:none;margin-top:8px"></div>
+    </div>
+
+    <!-- Weather (Carrigaline, hardcoded coords; device-local, no sync) -->
+    <div class="home-weather" id="homeWeather">
+      <div class="hw-icon" id="hwIcon">&#x1F324;</div>
+      <div class="hw-main">
+        <div class="hw-temp" id="hwTemp">—</div>
+        <div class="hw-cond" id="hwCond">Carrigaline</div>
+        <div class="hw-stamp" id="hwStamp"></div>
+      </div>
+      <div class="hw-meta" id="hwMeta"></div>
+    </div>
+
+    <!-- Today summary card (v302) — self-suppressing one-line-per-domain glance -->
+    <div id="homeTodayCard"></div>
+
+    <!-- Today at a glance — 2+2 split -->
+    <div class="today-split">
+      <div class="today-card today-card-train" id="tcTrainCard" style="grid-column:span 2">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div><div class="tc-icon" style="margin-bottom:0">&#x1F4AA;</div></div>
+          <div style="flex:1">
+            <div class="tc-label" style="margin-bottom:2px">Training</div>
+            <div class="tc-sub" id="tcTrainSub" style="font-size:13px">No session yet</div>
+          </div>
+          <div style="text-align:right">
+            <div class="tc-count" style="font-size:20px" id="tcTrainCount">&mdash;</div>
+            <div class="tc-label" id="tcTrainLabel">today</div>
+          </div>
+        </div>
+      </div>
+      <div class="today-card today-card-baby" id="tcBabyCard" style="grid-column:span 2">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div>
+            <div class="tc-icon" style="margin-bottom:0">&#x1F476;</div>
+          </div>
+          <div style="flex:1">
+            <div class="tc-label" style="margin-bottom:2px">Last medicine</div>
+            <div class="tc-sub" id="tcBabySub" style="font-size:13px">No medicine logged yet</div>
+            <div id="tcBabyBottleNote" style="font-size:12px;color:#9A5A10;font-weight:600;margin-top:2px;display:none"></div>
+          </div>
+          <div style="text-align:right">
+            <div class="tc-count" style="font-size:20px" id="tcBabyWeight">&mdash;</div>
+            <div class="tc-label">latest weight</div>
+          </div>
+        </div>
+      </div>
+      <!-- Plants (v379): always shown, unlike the self-suppressing Today-card row.
+           Plants has no nav-bar slot by default, so this is its permanent door. -->
+      <div class="today-card today-card-plants" id="tcPlantsCard" style="grid-column:span 2">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div>
+            <div class="tc-icon" style="margin-bottom:0">&#x1FAB4;</div>
+          </div>
+          <div style="flex:1">
+            <div class="tc-label" style="margin-bottom:2px">Plants</div>
+            <div class="tc-sub" id="tcPlantsSub" style="font-size:13px">No plants yet</div>
+          </div>
+          <div style="text-align:right">
+            <div class="tc-count" style="font-size:20px" id="tcPlantsCount">&mdash;</div>
+            <div class="tc-label" id="tcPlantsLabel">in the book</div>
+          </div>
+        </div>
+      </div>
+      <!-- Calories (v443): self-suppressing, UNLIKE the plants card above -
+           hidden until something is logged today, so a day Cathal isn't
+           tracking leaves the home screen quiet rather than showing a zero. -->
+      <div class="today-card today-card-cals" id="tcCalCard" style="grid-column:span 2;display:none">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div>
+            <div class="tc-icon" style="margin-bottom:0">&#x1F525;</div>
+          </div>
+          <div style="flex:1">
+            <div class="tc-label" style="margin-bottom:2px">Calories today</div>
+            <div class="tc-sub" id="tcCalSub" style="font-size:13px">Nothing logged yet</div>
+            <div style="height:5px;background:#EDE1CC;border-radius:3px;margin-top:7px;overflow:hidden">
+              <div id="tcCalBar" style="height:100%;width:0;border-radius:3px;background:#4CAF7D;transition:width .2s"></div>
+            </div>
+          </div>
+          <div style="text-align:right">
+            <div class="tc-count" style="font-size:20px" id="tcCalCount">&mdash;</div>
+            <div class="tc-label" id="tcCalLabel">kcal</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick-add buttons -->
+    <div class="home-quick-row">
+      <button class="hqbtn hqbtn-grocery" id="hqGrocery">+ Grocery</button>
+      <button class="hqbtn hqbtn-task" id="hqTask">+ Task</button>
+      <button class="hqbtn hqbtn-train" id="hqExercise">+ Exercise</button>
+      <button class="hqbtn" style="background:#F3EAFA;color:#7E22CE;border:1.5px solid #9333ea30" id="hqMed">+ Medicine</button>
+    </div>
+
+    <!-- Inline quick-add panel -->
+    <div class="hqp-wrap" id="homeQuickPanel">
+      <div class="hqp-label" id="hqpLabel">Add to Grocery</div>
+      <div class="hqp-row">
+        <input id="homeQuickInput" class="hqp-input" type="text" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Item name...">
+        <button class="hqp-add life" id="hqpAddBtn">Add</button>
+        <button class="hqp-cancel" id="hqpCancel" aria-label="Cancel">&#x2715;</button>
+      </div>
+    </div>
+
+    <!-- To-do spotlight -->
+    <div class="home-sec-hdr">
+      <span class="home-sec-title">&#x2605; Today</span>
+      <button class="home-sec-link" id="hSeeAllTodo">See all &#x2192;</button>
+    </div>
+    <div id="homeTodoSpot"></div>
+
+    <!-- Grocery spotlight -->
+    <div class="home-sec-hdr" style="margin-top:12px">
+      <span class="home-sec-title">&#x1F6D2; Grocery</span>
+      <button class="home-sec-link" id="hSeeAllGrocery">See all &#x2192;</button>
+    </div>
+    <div id="homeGrocerySpot"></div>
+
+    <!-- Week strip -->
+    <div class="home-sec-hdr" style="margin-top:14px" id="homeWeekHdr">
+      <span class="home-sec-title">&#x1F4AA; Training this week</span>
+    </div>
+    <div class="home-week-strip" id="homeWeekStrip"></div>
+
+    <div style="text-align:center;margin-top:20px;font-size:11px;color:#C8BEA8;font-weight:600;letter-spacing:.4px" id="appVersionLabel">v518 · 14/11/2026</div>
+
+  </div>
+</div>
+
+<div id="lifeSection" style="display:none">
+<div class="type-bar" id="typeBar">
+  <button class="type-btn active" data-lt="grocery">&#x1F6D2; Grocery</button>
+  <button class="type-btn" data-lt="todo">&#x2705; To-do</button>
+  <button class="type-btn" data-lt="personal">&#x1F464; Personal</button>
+  <button class="type-btn" data-lt="travel">&#x2708;&#xFE0F; Travel</button>
+  <button class="type-btn" data-lt="notes">&#x1F4DD; Notes</button>
+</div>
+
+<div class="content" id="listContentWrap">
+  <div id="mainContent">
+  <div class="input-card">
+    <div class="input-row">
+      <input id="itemInput" type="text" placeholder="Add an item..." autocomplete="off" autocorrect="off" spellcheck="false">
+      <button class="voice-mic-btn" id="voiceMicBtn" aria-label="Add by voice" style="display:none">&#x1F3A4;</button>
+      <button class="add-btn" id="addBtn" aria-label="Add item">+</button>
+    </div>
+    <div class="cat-row" id="catRow">
+      <span class="cat-label">Category:</span>
+      <span class="cat-chip" id="catChip"></span>
+      <span class="cat-hint" id="catHint">tap to change</span>
+    </div>
+    <div class="ac" id="ac"></div>
+    <div id="dueDateRow" style="display:none;margin-top:6px">
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <label style="font-size:12px;color:#7A5A30;font-weight:700;letter-spacing:.3px">&#x1F4C5; Due date</label>
+        <input id="dueDateInput" type="date" style="flex:1;padding:9px 13px;border:2px solid #E0D0B0;border-radius:9px;background:#FDFAF3;color:#7A5A30;font-family:inherit;font-size:13px;outline:none;box-sizing:border-box">
+
+        <button id="dueClearBtn" aria-label="Clear due date" style="border:none;background:none;color:#A0855A;font-size:12px;cursor:pointer;padding:2px 4px;touch-action:manipulation">✕ Clear</button>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;row-gap:4px;margin-top:6px">
+      <button id="collapseAllLink" style="border:none;background:none;color:#A0855A;font-size:12px;font-weight:700;cursor:pointer;padding:2px 4px;touch-action:manipulation;white-space:nowrap">&#9650;&#9660; Collapse all</button>
+      <div style="display:flex;gap:10px;margin-left:auto">
+        <button id="searchLink" style="border:none;background:none;color:#A0855A;font-size:12px;font-weight:700;cursor:pointer;padding:2px 4px;touch-action:manipulation;white-space:nowrap">&#x1F50D; Search</button>
+        <span id="listMoreItems" style="display:none;gap:10px">
+          <button id="printLink" style="border:none;background:none;color:#A0855A;font-size:12px;font-weight:700;cursor:pointer;padding:2px 4px;touch-action:manipulation;white-space:nowrap">&#x1F5A8; Print</button>
+          <button id="importLink" style="border:none;background:none;color:#A0855A;font-size:12px;font-weight:700;cursor:pointer;padding:2px 4px;touch-action:manipulation;white-space:nowrap">&#x2B07; Import list</button>
+        </span>
+        <button id="listMoreBtn" aria-label="More list tools" aria-expanded="false" aria-controls="listMoreItems" style="border:none;background:none;color:#A0855A;font-size:16px;font-weight:700;cursor:pointer;padding:2px 10px;min-width:40px;touch-action:manipulation">&#x22EF;</button>
+      </div>
+    </div>
+    <div id="searchRow" style="display:none;margin-top:8px">
+      <div style="display:flex;gap:6px;align-items:center">
+        <input id="listSearchInput" type="text" placeholder="Search this list..." autocomplete="off" style="flex:1;padding:9px 13px;border:2px solid #E0D0B0;border-radius:9px;background:#FDFAF3;color:#2A2010;font-family:inherit;font-size:14px;outline:none;box-sizing:border-box">
+        <button id="searchClearBtn" aria-label="Clear search" style="border:none;background:#F0EBE0;color:#8A7A5A;border-radius:8px;padding:9px 12px;font-family:inherit;font-size:13px;cursor:pointer">Clear</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" id="tabList">List <span class="tab-badge" id="listBadge"></span></button>
+    <button class="tab" id="tabHistory">&#x1F550; History</button>
+  </div>
+  <div id="listPanel">
+    <div id="listContent"></div>
+    <div style="display:flex;gap:6px">
+      <button class="clear-btn" id="clearBtn" style="display:none">&#x2715; Clear completed</button>
+      <button class="clear-btn" id="reopenBtn" style="display:none;background:#E8F0E8;color:#2D6B35;border-color:#2D6B3540">&#x21BA; Reopen all</button>
+    </div>
+  </div>
+  <div id="historyPanel">
+    <div class="hist-search"><input id="histSearch" type="text" placeholder="Search history..." autocomplete="off"></div>
+    <div id="historyContent"></div>
+  </div>
+</div>
+
+  </div><!-- end mainContent -->
+
+</div><!-- end lifeSection -->
+
+<!-- ============================================================
+     TRAIN SECTION
+     ============================================================ -->
+<div id="trainSection" style="display:none">
+
+  <!-- Sub-navigation -->
+  <div class="train-subnav">
+    <button class="tsn-btn active" data-view="programs">&#x1F3CB; Programs</button>
+    <button class="tsn-btn" data-view="log">&#x1F4CB; Log</button>
+    <button class="tsn-btn" data-view="history">&#x1F4C5; History</button>
+  </div>
+
+  <!-- PROGRAMS VIEW -->
+  <div id="trainProgramsView" class="train-content">
+    <div style="background:#FBF6EC;border:1px solid #E5D9C0;border-radius:10px;padding:11px 13px;margin-bottom:14px;font-size:12px;color:#7A6A4A;line-height:1.5">
+      &#x2139;&#xFE0F; <strong style="color:#1A7A3A">Physio-approved</strong> programmes were prescribed for your diagnosis. <strong style="color:#9A7A10">General fitness</strong> programmes predate it — check with your physio before doing these, especially during a flare-up.
+    </div>
+    <div class="prog-grid" id="progGrid"></div>
+  </div>
+  <div id="trainLogView" class="train-content" style="display:none">
+    <div class="workout-date-bar">
+      <button class="wdb-btn" id="prevDayBtn" aria-label="Previous day">&#x2039;</button>
+      <span class="wdb-label" id="workoutDateLabel">Today</span>
+      <button class="wdb-btn" id="nextDayBtn" aria-label="Next day">&#x203A;</button>
+    </div>
+
+    <!-- Exercises rendered here -->
+    <div id="workoutExercises"></div>
+
+    <!-- Add exercise input -->
+    <div class="add-ex-card">
+      <div class="add-ex-row">
+        <input id="exerciseInput" class="add-ex-input" type="text" placeholder="Exercise name..." autocomplete="off" autocorrect="off" spellcheck="false">
+        <button class="add-ex-btn" id="addExerciseBtn">+</button>
+      </div>
+      <div class="quick-ex">
+        <div class="quick-ex-label">Quick add</div>
+        <div class="quick-chips" id="quickChips"></div>
+      </div>
+    </div>
+
+    <!-- Cardio log -->
+    <div class="cardio-card">
+      <div class="cardio-card-title">&#x1F3C3; Cardio</div>
+      <div class="cardio-chips" id="cardioChips">
+        <button class="cardio-chip" data-activity="Walking" data-met="3.5" data-ico="&#x1F6B6;">&#x1F6B6; Walking</button>
+        <button class="cardio-chip" data-activity="Running" data-met="9.8" data-ico="&#x1F3C3;">&#x1F3C3; Running</button>
+        <button class="cardio-chip" data-activity="Cycling" data-met="7.5" data-ico="&#x1F6B4;">&#x1F6B4; Cycling</button>
+        <button class="cardio-chip" data-activity="Skipping" data-met="11.0" data-ico="&#x1FA83;">&#x1FA83; Skipping</button>
+        <button class="cardio-chip" data-activity="Swimming" data-met="8.0" data-ico="&#x1F3CA;">&#x1F3CA; Swimming</button>
+        <button class="cardio-chip" data-activity="Rowing" data-met="7.0" data-ico="&#x1F6A3;">&#x1F6A3; Rowing</button>
+        <button class="cardio-chip" data-activity="Hiking" data-met="5.3" data-ico="&#x1F9D7;">&#x1F9D7; Hiking</button>
+        <button class="cardio-chip" data-activity="HIIT" data-met="10.0" data-ico="&#x26A1;">&#x26A1; HIIT</button>
+      </div>
+      <div class="cardio-custom-row">
+        <input id="cardioCustomName" class="cardio-name-input" type="text" placeholder="Or type activity..." autocomplete="off" autocorrect="off">
+      </div>
+      <div class="cardio-inputs">
+        <div class="cardio-field"><label>Duration (min)</label><input id="cardioDuration" type="number" class="cardio-input" min="1" max="600" placeholder="30" inputmode="numeric"></div>
+        <div class="cardio-field"><label>Calories (kcal)</label><input id="cardioCalories" type="number" class="cardio-input" min="0" max="5000" placeholder="auto" inputmode="numeric"></div>
+      </div>
+      <div class="cardio-est" id="cardioEst"></div>
+      <button class="cardio-log-btn" id="cardioLogBtn">Log</button>
+    </div>
+    <!-- Cardio history for selected date rendered here -->
+    <div id="cardioHistory"></div>
+  </div>
+
+  <!-- HISTORY VIEW -->
+  <div id="trainHistoryView" class="train-content" style="display:none">
+    <div id="trainHistoryContent"></div>
+  </div>
+
+
+</div><!-- end trainSection -->
+
+<!-- ============================================================
+     NOTES SECTION
+     ============================================================ -->
+<div id="notesSection" style="display:none">
+  <div style="display:flex;gap:4px;padding:5px 5px 4px;background:#A05A10;box-shadow:0 2px 10px rgba(0,0,0,.15)" id="notesSubNav">
+    <button class="notes-tab-btn active" data-nview="personal">&#x1F464; Personal</button>
+    <button class="notes-tab-btn" data-nview="work">&#x1F4BC; Work</button>
+  </div>
+  <div id="notesPersonalView" class="content" style="padding-top:8px"></div>
+  <div id="notesWorkView" class="content" style="padding-top:8px;display:none"></div>
+</div>
+
+<!-- ============================================================
+     TRACK SECTION (v339) -- General log + Food journal + Body
+     Sub-views re-hosted from Lists/Notes (Log, Food) and Train (Body);
+     container ids keep their pre-v339 names -- renderers target them by id.
+     ============================================================ -->
+<div id="trackSection" style="display:none">
+  <div class="train-subnav" id="trackSubNav" style="background:#A05A10">
+    <button class="tsn-btn active" data-tview="log">&#x1F4CB; Log</button>
+    <button class="tsn-btn" data-tview="medicine">&#x1F48A; Medicine</button>
+    <button class="tsn-btn" data-tview="body">&#x2696;&#xFE0F; Body</button>
+    <button class="tsn-btn" data-tview="food">&#x1F35C; Food</button>
+  </div>
+  <div id="notesLogView" class="content" style="padding-top:12px;padding-bottom:90px">
+    <!-- Quick log input -->
+    <div style="padding:0 12px;margin-bottom:12px">
+      <div style="display:flex;gap:8px;margin-bottom:6px">
+        <input id="logActionInput" type="text" placeholder="e.g. Cut grass, Took shower…" autocomplete="off" autocorrect="off"
+          style="flex:1;border:2px solid #E0D0B0;border-radius:9px;padding:11px 13px;font-family:inherit;font-size:15px;outline:none;background:#FDFAF3;color:#2A2010">
+        <button id="logActionBtn" style="padding:11px 16px;background:#A05A10;border:none;border-radius:9px;color:#fff;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;touch-action:manipulation">Log</button>
+      </div>
+      <input id="logActionDt" type="datetime-local"
+        style="width:100%;border:2px solid #E0D0B0;border-radius:9px;padding:9px 13px;font-family:inherit;font-size:13px;outline:none;background:#FDFAF3;color:#7A5A30;box-sizing:border-box">
+    </div>
+    <div id="logActionList"></div>
+  </div>
+
+  <!-- TRACK MEDICINE (v380) — factual family medicine log, separate from the
+       Baby section's weight-based dosing calculator. No dose math or interval
+       advisories here by design (that logic stays exclusively in Baby); this
+       is just "what, when, how much, notes", same shape as the Log tab. -->
+  <div id="notesMedicineView" class="content" style="padding-top:12px;display:none;padding-bottom:90px">
+    <!-- v486: shown only for My daughter (renderTrackMedicine). Track has no dose-gap
+         advisories, and Baby's never read fl4_track_med, so steer her doses there. -->
+    <div id="trkMedBabyNote" style="display:none;margin:0 12px 12px;padding:10px 12px;background:#FDF0E0;border:1.5px solid #E0B070;border-radius:9px;font-size:13px;line-height:1.4;color:#7A4A18">
+      &#x26A0;&#xFE0F; For Calpol or Nurofen, log it in <b>Baby &#x2192; Medicine</b> instead &mdash; the dose-gap reminders there don&rsquo;t see doses logged here.
+    </div>
+    <div style="padding:0 12px;margin-bottom:12px">
+      <div class="trkmed-quick-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+        <button type="button" class="trkmed-chip" data-med="Nurofen" style="border:1.5px solid #A05A1030;background:#FDF0E0;color:#A05A10;border-radius:16px;padding:9px 14px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;touch-action:manipulation">Nurofen</button>
+        <button type="button" class="trkmed-chip" data-med="Panadol" style="border:1.5px solid #A05A1030;background:#FDF0E0;color:#A05A10;border-radius:16px;padding:9px 14px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;touch-action:manipulation">Panadol</button>
+        <button type="button" class="trkmed-chip" data-med="Amoxicillin" style="border:1.5px solid #A05A1030;background:#FDF0E0;color:#A05A10;border-radius:16px;padding:9px 14px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;touch-action:manipulation">Amoxicillin</button>
+      </div>
+      <input id="trkMedName" type="text" placeholder="Medicine name" autocomplete="off" autocorrect="off"
+        style="width:100%;border:2px solid #E0D0B0;border-radius:9px;padding:11px 13px;font-family:inherit;font-size:15px;outline:none;background:#FDFAF3;color:#2A2010;box-sizing:border-box;margin-bottom:6px">
+      <div style="display:flex;gap:8px;margin-bottom:6px">
+        <input id="trkMedDose" type="text" placeholder="Dose (optional)" autocomplete="off"
+          style="flex:1;border:2px solid #E0D0B0;border-radius:9px;padding:11px 13px;font-family:inherit;font-size:15px;outline:none;background:#FDFAF3;color:#2A2010">
+        <input id="trkMedDt" type="datetime-local"
+          style="flex:1;border:2px solid #E0D0B0;border-radius:9px;padding:9px 13px;font-family:inherit;font-size:13px;outline:none;background:#FDFAF3;color:#7A5A30;box-sizing:border-box">
+      </div>
+      <input id="trkMedNotes" type="text" placeholder="Notes (optional)" autocomplete="off"
+        style="width:100%;border:2px solid #E0D0B0;border-radius:9px;padding:11px 13px;font-family:inherit;font-size:15px;outline:none;background:#FDFAF3;color:#2A2010;box-sizing:border-box;margin-bottom:8px">
+      <button id="trkMedBtn" style="width:100%;padding:11px 16px;background:#A05A10;border:none;border-radius:9px;color:#fff;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;touch-action:manipulation">Log</button>
+    </div>
+    <div id="trkMedList"></div>
+  </div>
+
+  <!-- FOOD JOURNAL -->
+  <div id="notesFoodView" class="content" style="padding-top:0;display:none;padding-bottom:90px">
+    <!-- Date navigator -->
+    <div style="display:flex;align-items:center;background:#7A3A05;padding:8px 12px;gap:8px">
+      <button id="foodPrevDay" style="width:36px;height:36px;border:none;background:rgba(255,255,255,.15);color:#fff;border-radius:8px;font-size:20px;cursor:pointer;touch-action:manipulation">&#x2039;</button>
+      <div id="foodDateLabel" style="flex:1;text-align:center;font-family:Georgia,serif;font-size:16px;font-weight:600;color:#fff"></div>
+      <button id="foodNextDay" style="width:36px;height:36px;border:none;background:rgba(255,255,255,.15);color:#fff;border-radius:8px;font-size:20px;cursor:pointer;touch-action:manipulation">&#x203A;</button>
+    </div>
+    <!-- Daily calorie summary -->
+    <div id="foodDaySummary" style="background:#fff8f0;padding:12px 16px;border-bottom:1px solid #E8D8C0;text-align:center;font-size:14px;color:#7A3A05;cursor:pointer"></div>
+    <!-- Daily note -->
+    <div style="padding:6px 12px;background:#FDFAF3;border-bottom:1px solid #E8D8C0;display:flex;align-items:center;gap:8px">
+      <span style="font-size:12px;color:#A05A10;font-weight:700;white-space:nowrap">&#x1F4DD; Daily note:</span>
+      <input id="foodDailyNote" type="text" placeholder="How do you feel today? Any notes…" autocomplete="off"
+        style="flex:1;border:none;background:none;font-family:inherit;font-size:13px;color:#2A2010;outline:none;padding:4px 0">
+    </div>
+    <!-- Entries -->
+    <div id="foodEntries" style="padding:8px 12px"></div>
+    <!-- Add form -->
+    <div style="padding:10px 12px 6px;background:#FDFAF3;border-top:1px solid #E8D8C0;position:sticky;bottom:55px">
+      <!-- Autosuggest panel (v442). Lives INSIDE the sticky wrapper on purpose:
+           position:sticky makes that div the containing block, so bottom:100%
+           floats the panel directly above the add form instead of the page. -->
+      <div id="foodSuggestBox" style="display:none;position:absolute;left:12px;right:12px;bottom:100%;margin-bottom:6px;background:#fff;border:1.5px solid #C4A07A;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.18);overflow:hidden;overflow-y:auto;max-height:212px;z-index:10"></div>
+      <!-- Saved meals row -->
+      <div class="chip-scroll" style="display:flex;gap:5px;margin-bottom:7px;overflow-x:auto;padding:0 24px 2px 0" id="savedMealsRow"></div>
+      <div style="display:flex;gap:6px;margin-bottom:6px">
+        <input id="foodItemInput" type="text" placeholder="What did you eat?" autocomplete="off" autocorrect="off"
+          style="flex:1;border:2px solid #E0D0B0;border-radius:9px;padding:10px 12px;font-family:inherit;font-size:15px;outline:none;background:#FDFAF3;color:#2A2010">
+        <!-- Meal picker (v457). Options are built from MEAL_TYPES in renderFoodView,
+           so adding a meal type needs no edit here. Deliberately a native
+           <select>: the phone's own picker shows all four at once, where the
+           button it replaced had to be tapped up to three times to reach one. -->
+        <select id="foodMealSelect" aria-label="Meal" style="padding:10px 8px;background:#F5E8D8;border:1.5px solid #C4A07A;border-radius:9px;color:#7A3A05;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;touch-action:manipulation"></select>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:4px">
+        <input id="foodCalInput" type="number" min="0" max="5000" placeholder="kcal (auto-estimated)" inputmode="numeric"
+          style="flex:1;border:2px solid #E0D0B0;border-radius:9px;padding:10px 12px;font-family:inherit;font-size:15px;outline:none;background:#FDFAF3;color:#2A2010">
+        <button id="foodAddBtn" style="padding:10px 16px;background:#A05A10;border:none;border-radius:9px;color:#fff;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;touch-action:manipulation">Log</button>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <div id="foodCalEst" style="flex:1;font-size:11px;color:#A05A10;font-weight:600;min-height:16px"></div>
+        <button id="saveMealBtn" style="padding:5px 10px;background:none;border:1.5px solid #C4A07A;border-radius:7px;color:#A05A10;font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;touch-action:manipulation;white-space:nowrap">&#x1F4BE; Save as meal</button>
+      </div>
+    </div>
+  </div>
+  <div id="trainBodyView" class="train-content" style="display:none">
+    <div id="tdeeCard"></div>
+    <div class="bw-card">
+      <div class="bw-card-title">&#x2696;&#xFE0F; Log Bodyweight</div>
+      <div class="bw-input-row">
+        <input id="bwInput" type="number" min="30" max="300" step="0.1" class="bw-input" placeholder="e.g. 80.5">
+        <span class="bw-unit">kg</span>
+        <button class="bw-log-btn" id="bwLogBtn">Log</button>
+      </div>
+    </div>
+    <div class="bw-card">
+      <div class="bw-card-title">&#x1F4C8; Weight History</div>
+      <div id="bwChart"></div>
+      <div id="bwHistory"></div>
+    </div>
+
+    <div class="bw-card">
+      <div class="bw-card-title">&#x2764;&#xFE0F; Log Blood Pressure</div>
+      <div class="bp-input-grid">
+        <div class="bp-field">
+          <span class="bp-field-label">Systolic</span>
+          <input id="bpSys" type="number" min="60" max="250" class="bw-input" placeholder="120" inputmode="numeric">
+        </div>
+        <div class="bp-field">
+          <span class="bp-field-label">Diastolic</span>
+          <input id="bpDia" type="number" min="40" max="150" class="bw-input" placeholder="80" inputmode="numeric">
+        </div>
+        <div class="bp-field">
+          <span class="bp-field-label">Pulse</span>
+          <input id="bpPulse" type="number" min="30" max="220" class="bw-input" placeholder="70" inputmode="numeric">
+        </div>
+      </div>
+      <button class="bw-log-btn" id="bpLogBtn">Log</button>
+    </div>
+    <div class="bw-card">
+      <div class="bw-card-title">&#x1F4C8; BP History</div>
+      <div id="bpChart"></div>
+      <div id="bpHistory"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     RECIPES SECTION
+     ============================================================ -->
+<div id="recipesSection" style="display:none">
+  <div style="display:flex;justify-content:flex-end;padding:6px 14px 0">
+    <button id="rcpSearchBtn" style="border:none;background:none;color:#A0855A;font-size:12px;font-weight:700;cursor:pointer;padding:2px 4px;touch-action:manipulation">&#x1F50D; Search</button>
+  </div>
+  <div id="rcpSearchRow" style="display:none;padding:0 14px 6px">
+    <div style="display:flex;gap:6px;align-items:center">
+      <input id="rcpSearchInput" type="text" placeholder="Search recipes..." autocomplete="off" style="flex:1;padding:9px 13px;border:2px solid #E0D0B0;border-radius:9px;background:#FDFAF3;color:#2A2010;font-family:inherit;font-size:14px;outline:none;box-sizing:border-box">
+      <button id="rcpSearchClear" aria-label="Clear search" style="border:none;background:#F0EBE0;color:#8A7A5A;border-radius:8px;padding:9px 12px;font-family:inherit;font-size:13px;cursor:pointer">Clear</button>
+    </div>
+  </div>
+  <div id="recipesContent" style="padding:14px 14px 100px"></div>
+</div>
+
+<!-- ============================================================
+     TRIPS SECTION
+     ============================================================ -->
+<div id="tripsSection" style="display:none">
+  <div id="tripsContent" style="padding:14px 14px 100px"></div>
+</div>
+
+<!-- ============================================================
+     PLANTS SECTION (v377)
+     ============================================================ -->
+<div id="plantsSection" style="display:none">
+  <div id="plantsContent" style="padding:14px 14px 100px"></div>
+</div>
+
+<div id="watchSection" style="display:none">
+  <div id="watchContent" style="padding:14px 14px 100px"></div>
+</div>
+
+<!-- ============================================================
+     HOME INVENTORY SECTION (v424 as Appliances, widened v428)
+     ============================================================ -->
+<div id="appliancesSection" style="display:none">
+  <div id="appliancesContent" style="padding:14px 14px 100px"></div>
+</div>
+
+<!-- ============================================================
+     HEALTH SECTION (v449) - the family's medical history
+     ============================================================ -->
+<div id="healthSection" style="display:none">
+  <div id="healthContent" style="padding:14px 14px 100px"></div>
+</div>
+
+<!-- ============================================================
+     PROJECTS SECTION (v499) - renovations, DIY and household admin
+     ============================================================ -->
+<div id="projectsSection" style="display:none">
+  <div id="projectsContent" style="padding:14px 14px 100px"></div>
+</div>
+
+<!-- ============================================================
+     GOLF SECTION (v500) - courses and hole-by-hole round scores
+     ============================================================ -->
+<div id="golfSection" style="display:none">
+  <div id="golfContent" style="padding:14px 14px 100px"></div>
+</div>
+
+<!-- ============================================================
+     BABY SECTION
+     ============================================================ -->
+<div id="babySection" style="display:none">
+
+  <div class="baby-subnav">
+    <button class="bsn-btn active" data-bview="growth">&#x1F4CF; Growth</button>
+    <button class="bsn-btn" data-bview="medicine">&#x1F48A; Medicine</button>
+    <button class="bsn-btn" data-bview="milestones">&#x2B50; Milestones</button>
+    <button class="bsn-btn" data-bview="teeth">&#x1F9B7; Teeth</button>
+    <button class="bsn-btn" data-bview="bags">&#x1F45C; Bags</button>
+  </div>
+
+  <!-- GROWTH -->
+  <div id="babyGrowthView" class="baby-content">
+    <div class="baby-log-card">
+      <div class="baby-card-title">&#x1F4CF; Log measurement</div>
+      <div class="growth-input-grid">
+        <div class="growth-field"><label>Height (cm)</label><input id="growthHeight" class="growth-input" type="number" min="40" max="130" step="0.1" placeholder="—" inputmode="decimal"></div>
+        <div class="growth-field"><label>Weight (kg)</label><input id="growthWeight" class="growth-input" type="number" min="2" max="30" step="0.05" placeholder="—" inputmode="decimal"></div>
+      </div>
+      <div style="margin-bottom:8px"><label style="font-size:11px;font-weight:700;color:#8A6A8A;text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Date</label>
+        <input id="growthDate" type="date" class="growth-input" style="font-size:14px;text-align:left"></div>
+      <button class="baby-log-btn" id="growthLogBtn">Log</button>
+    </div>
+    <div class="baby-log-card">
+      <div class="baby-card-title">&#x1F4C8; History</div>
+      <div id="growthHistory"></div>
+    </div>
+  </div>
+
+  <!-- MEDICINE -->
+  <div id="babyMedicineView" class="baby-content" style="display:none">
+    <div class="baby-log-card">
+      <div class="baby-card-title">&#x1F48A; Log medicine</div>
+      <div class="med-quick-chips" id="medChips">
+        <button class="med-chip" data-med="Calpol">Calpol</button>
+        <button class="med-chip" data-med="Nurofen">Nurofen</button>
+        <button class="med-chip" data-med="Antibiotic">Antibiotic</button>
+        <button class="med-chip" data-med="Antihistamine">Antihistamine</button>
+        <button class="med-chip" data-med="Vitamin D">Vitamin D</button>
+      </div>
+      <div class="med-input-row">
+        <input id="medName" class="med-input" type="text" placeholder="Medicine name" autocomplete="off">
+        <input id="medDose" class="med-input" type="text" placeholder="Dose e.g. 5ml">
+      </div>
+      <div class="med-input-row">
+        <input id="medDate" type="date" class="med-input">
+        <input id="medTime" type="time" class="med-input">
+      </div>
+      <div class="med-full-row"><input id="medNote" class="med-input" type="text" placeholder="Notes (optional)" autocomplete="off"></div>
+      <button class="baby-log-btn" id="medLogBtn">Log</button>
+    </div>
+    <div class="baby-log-card">
+      <div class="baby-card-title">&#x1F4CB; Log</div>
+      <div id="medicineHistory"></div>
+    </div>
+  </div>
+
+  <!-- MILESTONES -->
+  <div id="babyMilestonesView" class="baby-content" style="display:none">
+    <div class="baby-log-card">
+      <div class="baby-card-title">&#x2B50; Add milestone</div>
+      <div class="ms-cat-row" id="msCatRow">
+        <button class="ms-cat-btn sel" data-cat="physical" style="background:#1d4ed8;border-color:#1d4ed8">&#x1F3C3; Physical</button>
+        <button class="ms-cat-btn" data-cat="language" style="color:#059669">&#x1F4AC; Language</button>
+        <button class="ms-cat-btn" data-cat="social" style="color:#d97706">&#x1F91D; Social</button>
+        <button class="ms-cat-btn" data-cat="cognitive" style="color:#9333ea">&#x1F9E0; Cognitive</button>
+      </div>
+      <div class="med-full-row"><input id="msText" class="med-input" type="text" placeholder="Describe the milestone..." autocomplete="off"></div>
+      <div style="margin-bottom:8px"><input id="msDate" type="date" class="med-input"></div>
+      <button class="baby-log-btn" id="msLogBtn">Log</button>
+    </div>
+    <div class="baby-log-card">
+      <div class="baby-card-title">&#x1F4D6; Timeline</div>
+      <div id="milestonesHistory"></div>
+    </div>
+  </div>
+
+  <!-- TEETH -->
+  <div id="babyTeethView" class="baby-content" style="display:none">
+    <div class="baby-log-card">
+      <div class="baby-card-title">&#x1F9B7; Tap a tooth to record it</div>
+      <div class="teeth-jaw-label">Upper</div>
+      <div class="teeth-row" id="teethUpperRow"></div>
+      <div class="teeth-midline"></div>
+      <div class="teeth-row" id="teethLowerRow"></div>
+      <div class="teeth-jaw-label" style="margin-top:6px">Lower</div>
+      <div class="teeth-count" id="teethCount">0 of 20 teeth</div>
+    </div>
+  </div>
+
+  <!-- BAGS -->
+  <div id="babyBagsView" class="baby-content" style="display:none">
+
+    <!-- Bag selector -->
+    <div class="baby-log-card" style="padding:10px 10px 8px">
+      <div style="display:flex;gap:6px;flex-wrap:wrap" id="bagTabRow"></div>
+    </div>
+
+    <!-- Active bag -->
+    <div id="bagContent"></div>
+
+    <!-- Add item to bag -->
+    <div class="baby-log-card">
+      <div class="baby-card-title">&#x2795; Add item</div>
+      <div class="med-full-row">
+        <input id="bagItemInput" class="med-input" type="text" placeholder="e.g. Nappies, Wipes, Dummy…" autocomplete="off" autocorrect="off">
+      </div>
+      <button class="baby-log-btn" id="bagAddItemBtn" style="touch-action:manipulation">Add to bag</button>
+    </div>
+
+    <!-- Manage bags -->
+    <div class="baby-log-card" id="bagManageCard">
+      <div class="baby-card-title">&#x2699;&#xFE0F; Bags</div>
+      <div id="bagManageList"></div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <input id="bagNameInput" class="med-input" type="text" placeholder="New bag name…" style="flex:1" autocomplete="off">
+        <button class="baby-log-btn" id="bagCreateBtn" style="flex-shrink:0;width:auto;padding:10px 14px;touch-action:manipulation">Create</button>
+      </div>
+    </div>
+
+  </div>
+
+</div><!-- end babySection -->
+
+<!-- Tooth tap modal -->
+<div id="toothModal">
+  <div class="tooth-modal-box">
+    <div class="tooth-modal-name" id="toothModalName"></div>
+    <div class="tooth-modal-sub" id="toothModalSub"></div>
+    <button class="tooth-modal-btn tmbtn-erupt" id="toothEruptBtn"></button>
+    <button class="tooth-modal-btn tmbtn-cancel" id="toothCancelBtn">Cancel</button>
+  </div>
+</div>
+
+<!-- SESSION OVERLAY (fullscreen active session) -->
+<div id="sessionOverlay">
+  <div class="ses-inner">
+    <div class="ses-prog-bar-wrap"><div class="ses-prog-fill" id="sesProgFill"></div></div>
+    <div class="ses-hdr">
+      <button class="ses-back" id="sesBackBtn" aria-label="Back to programmes">&#x2039;</button>
+      <span class="ses-title" id="sesTitle"></span>
+      <span class="ses-count" id="sesCount"></span>
+    </div>
+    <div class="ses-body" id="sesBody"></div>
+  </div>
+</div>
+
+
+<!-- CATEGORY PICKER MODAL -->
+<!-- Weather detail sheet (hourly + next 3 days) -->
+<div class="overlay" id="weatherOverlay">
+  <div class="modal-box" style="position:relative">
+    <button class="modal-close" id="weatherClose" aria-label="Close">&#x2715;</button>
+    <div class="modal-title">Weather</div>
+    <div id="weatherSheetBody"></div>
+  </div>
+</div>
+
+<div class="overlay" id="pickerOverlay">
+  <div class="modal-box" style="position:relative">
+    <button class="modal-close" id="pickerClose" aria-label="Close">&#x2715;</button>
+    <div class="modal-title" id="pickerTitle">Choose a category</div>
+    <div class="picker-grid" id="pickerGrid"></div>
+    <button class="picker-add-cat" id="addCatBtn">&#x2795; Add custom category</button>
+
+    <!-- Inline add-category form (hidden by default) -->
+    <div id="addCatForm" style="display:none">
+      <div style="height:1px;background:#E8E4DC;margin:14px 0"></div>
+      <div class="modal-title" style="font-size:16px">New Category</div>
+      <div class="add-cat-form">
+        <label>Name</label>
+        <input id="newCatName" type="text" placeholder="e.g. Baby, Pet Food..." maxlength="24">
+        <label>Icon</label>
+        <div class="emoji-grid" id="emojiGrid"></div>
+        <label>Colour</label>
+        <div class="color-grid" id="colorGrid"></div>
+      </div>
+      <button class="form-btn" id="saveCatBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- LOGIN OVERLAY -->
+<div id="loginOverlay" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;background:#1C0A04;z-index:900;overflow-y:auto;align-items:center;justify-content:center">
+  <div style="width:100%;max-width:400px;padding:24px 20px">
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="font-size:48px;margin-bottom:8px">🔥</div>
+      <div style="font-family:Georgia,serif;font-size:28px;font-weight:600;color:#fff;margin-bottom:6px">Hearth</div>
+      <div style="font-size:14px;color:rgba(255,255,255,.5)">Your family hub</div>
+    </div>
+
+    <!-- Step 1: Firebase -->
+    <div id="loginStepFb" style="background:rgba(255,255,255,.06);border-radius:16px;padding:20px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">Firebase project ID</div>
+      <div style="display:flex;gap:8px">
+        <input id="loginFbInput" style="flex:1;background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.15);border-radius:9px;padding:11px 13px;color:#fff;font-size:15px;font-family:inherit;outline:none" placeholder="Paste your database URL or project ID">
+        <button id="loginFbSaveBtn" style="padding:11px 16px;background:#C4833A;border:none;border-radius:9px;color:#fff;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap">Set</button>
+      </div>
+      <div id="loginFbOk" style="display:none;font-size:12px;color:#6BCF86;margin-top:6px">✓ Database connected</div>
+      <div id="loginApiKeyRow" style="display:none;margin-top:10px">
+        <div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:5px">Web API Key <span style="opacity:.5">(Project Settings → General)</span></div>
+        <div style="display:flex;gap:8px">
+          <input id="loginApiKeyInput" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="AIza..." style="flex:1;background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.15);border-radius:9px;color:#fff;padding:10px 12px;font-family:inherit;font-size:13px;outline:none">
+          <button id="loginApiKeySaveBtn" style="padding:11px 16px;background:#C4833A;border:none;border-radius:9px;color:#fff;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap">Set</button>
+        </div>
+        <div id="loginApiKeyOk" style="display:none;font-size:12px;color:#6BCF86;margin-top:6px">✓ API key set</div>
+      </div>
+      <details style="margin-top:10px">
+        <summary style="font-size:12px;color:rgba(255,255,255,.4);cursor:pointer">How to get a free project →</summary>
+        <ol style="font-size:12px;color:rgba(255,255,255,.4);line-height:1.8;margin:8px 0 0 16px;padding:0">
+          <li>console.firebase.google.com → Add project</li>
+          <li>Build → Realtime Database → Create Database</li>
+          <li>Choose region → <strong style="color:rgba(255,255,255,.6)">Start in test mode</strong></li>
+          <li>Copy project ID from the URL bar</li>
+        </ol>
+        <div style="background:rgba(255,255,255,.06);border-radius:8px;padding:10px;margin-top:8px;font-size:11px;color:rgba(255,255,255,.5);line-height:1.7">
+          Rules tab → paste:<br>
+          <code style="color:#6BCF86">{"rules":{"hearth":{".read":"auth != null",".write":"auth != null"}}}</code>
+        </div>
+      </details>
+    </div>
+
+    <!-- Step 2: Account -->
+    <div id="loginStepAccount" style="background:rgba(255,255,255,.06);border-radius:16px;padding:20px;margin-bottom:12px;opacity:.4;pointer-events:none" >
+      <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">Your account</div>
+      <input id="loginUsernameInput" name="username" autocomplete="username" style="width:100%;background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.15);border-radius:9px;padding:11px 13px;color:#fff;font-size:15px;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:8px" placeholder="Username" autocapitalize="none" autocorrect="off" spellcheck="false">
+      <input id="loginPasswordInput" type="password" name="password" autocomplete="current-password" style="width:100%;background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.15);border-radius:9px;padding:11px 13px;color:#fff;font-size:15px;font-family:inherit;outline:none;box-sizing:border-box;margin-bottom:12px" placeholder="Password">
+      <div id="loginError" style="font-size:13px;color:#f87171;margin-bottom:10px;display:none"></div>
+      <button id="loginBtn" style="width:100%;padding:13px;background:#C4833A;border:none;border-radius:10px;color:#fff;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:8px">Log in</button>
+      <button id="createAccountBtn" style="width:100%;padding:13px;background:transparent;border:1.5px solid rgba(255,255,255,.2);border-radius:10px;color:rgba(255,255,255,.7);font-family:inherit;font-size:15px;cursor:pointer">Create account</button>
+    </div>
+
+    <div id="loginSpinner" style="display:none;text-align:center;color:rgba(255,255,255,.5);padding:16px;font-size:14px">Signing in…</div>
+  </div>
+</div>
+
+<!-- SYNC MODAL -->
+<div class="overlay" id="syncOverlay">
+  <div class="modal-box" style="position:relative">
+    <button class="modal-close" id="syncClose" aria-label="Close sync settings">&#x2715;</button>
+    <div class="modal-title">&#x1F504; Sync</div>
+
+    <!-- Firebase Auth setup -->
+    <div class="sync-section" id="syncApiKeySection">
+      <div class="sync-section-title">Firebase Auth (optional)</div>
+      <div style="font-size:12px;color:#7A8772;margin-bottom:8px">Add your Web API Key to secure your data. Found in Firebase Console → Project Settings → General → Your Apps → Config</div>
+      <div style="display:flex;gap:8px;margin-bottom:6px">
+        <input id="syncApiKeyInput" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="AIza..." class="sync-input" style="flex:1">
+        <button id="syncApiKeySaveBtn" class="sync-btn" style="margin:0;padding:10px 14px;white-space:nowrap">Set</button>
+      </div>
+      <div id="syncApiKeyStatus" style="font-size:12px;margin-bottom:4px"></div>
+    </div>
+    <div id="syncProfile" style="display:none;background:#F0F7F0;border-radius:12px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px">
+      <div id="syncAvatarCircle" style="width:36px;height:36px;border-radius:50%;background:#2D6B35;color:#fff;font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0"></div>
+      <div style="flex:1">
+        <div id="syncUsernameLbl" style="font-size:15px;font-weight:700;color:#2A3A28"></div>
+        <div id="syncFbLbl" style="font-size:11px;color:#7A8772"></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <button class="sync-btn" id="syncNowBtn" style="flex:1;margin:0">&#x2191;&#x2193; Sync now</button>
+        <button class="sync-btn outline" id="logoutBtn" style="margin:0;padding:10px 14px;white-space:nowrap;color:#C03030;border-color:#C03030">Log out</button>
+      </div>
+    </div>
+
+    <!-- Household -->
+    <div class="sync-section">
+      <div class="sync-section-title">Household</div>
+       <div id="syncHouseholdConnected" style="display:none">
+         <div style="background:#E8F5E9;border-radius:10px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px">
+           <span style="font-size:20px">&#x1F3E0;</span>
+           <div>
+             <div style="font-size:12px;font-weight:700;color:#2D6B35;text-transform:uppercase;letter-spacing:.4px">Household active</div>
+             <div style="font-size:11px;color:#4A7A4A;margin-top:1px">You are syncing with household members</div>
+           </div>
+         </div>
+         <div style="margin-bottom:10px">
+           <div style="font-size:11px;font-weight:700;color:#7A8772;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Your household code</div>
+           <div style="display:flex;align-items:center;gap:8px">
+             <div id="syncHouseholdCodeDisplay" style="flex:1;font-family:monospace;font-size:24px;font-weight:700;letter-spacing:6px;color:#2D6B35;background:#F0F7F0;border-radius:8px;padding:10px 14px;text-align:center"></div>
+             <button class="sync-btn outline" id="copyHouseholdCodeBtn" aria-label="Copy household code" style="margin:0;padding:10px 12px;white-space:nowrap">&#x1F4CB; Copy</button>
+           </div>
+           <div style="font-size:11px;color:#7A8772;margin-top:4px;text-align:center">Share this code with family members so they can join</div>
+         </div>
+         <div id="syncMembersList" style="margin-bottom:10px;font-size:13px;color:#4A4A3A"></div>
+         <div style="display:flex;gap:8px;margin-bottom:8px">
+           <input class="sync-input" id="inviteUsernameInput" placeholder="Invite by username" style="flex:1;margin:0">
+           <button class="sync-btn" id="inviteUserBtn" aria-label="Invite user" style="margin:0;padding:10px 14px;white-space:nowrap">Invite</button>
+         </div>
+         <button class="sync-btn outline" id="leaveHouseholdBtn" aria-label="Leave household" style="margin-top:4px;border-color:#C05050;color:#C05050;width:100%">Leave household</button>
+       </div>
+       <div id="syncHouseholdSetup">
+         <div style="background:#F5F5F5;border-radius:10px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px">
+           <span style="font-size:20px">&#x1F465;</span>
+           <div>
+             <div style="font-size:12px;font-weight:700;color:#7A8772;text-transform:uppercase;letter-spacing:.4px">No household yet</div>
+             <div style="font-size:11px;color:#9A9A8A;margin-top:1px">Join an existing one or create a new one</div>
+           </div>
+         </div>
+         <div style="background:#F0F7F0;border-radius:12px;padding:16px;margin-bottom:10px">
+           <div style="font-size:11px;font-weight:700;color:#4A7A4A;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Join existing household</div>
+           <input class="sync-input" id="joinHouseholdInput" placeholder="Enter code e.g. ABC123" style="margin-bottom:8px;font-family:monospace;font-size:22px;letter-spacing:6px;text-transform:uppercase;font-weight:700;text-align:center;padding:14px">
+           <button class="sync-btn" id="joinHouseholdBtn" style="background:#2D6B35;width:100%">Join household</button>
+         </div>
+         <div style="text-align:center;font-size:13px;color:#7A8772;margin:10px 0">or</div>
+         <button class="sync-btn outline" id="createHouseholdBtn" style="width:100%">&#x2795; Create a new household</button>
+       </div>
+    </div>
+
+    <!-- What to sync -->
+    <div class="sync-section">
+      <div class="sync-section-title">Share with household</div>
+      <div style="font-size:12px;color:#7A8772;margin-bottom:10px;line-height:1.5">Your own data (health, lists, baby) always syncs across your own devices automatically. These toggles control what household members can see.</div>
+      <div id="syncToggles">
+        <div class="sync-toggle-row"><span class="sync-toggle-label">&#x1F6D2; Grocery</span><label class="toggle-switch"><input type="checkbox" class="sync-chk" data-key="grocery" checked><span class="toggle-slider"></span></label></div>
+        <div class="sync-toggle-row"><span class="sync-toggle-label">&#x2705; To-do</span><label class="toggle-switch"><input type="checkbox" class="sync-chk" data-key="todo" checked><span class="toggle-slider"></span></label></div>
+        <div class="sync-toggle-row"><span class="sync-toggle-label">&#x2708;&#xFE0F; Travel</span><label class="toggle-switch"><input type="checkbox" class="sync-chk" data-key="travel" checked><span class="toggle-slider"></span></label></div>
+        <div class="sync-toggle-row"><span class="sync-toggle-label">&#x1F464; Personal</span><label class="toggle-switch"><input type="checkbox" class="sync-chk" data-key="personal"><span class="toggle-slider"></span></label></div>
+        <div class="sync-toggle-row"><span class="sync-toggle-label">&#x1F4DD; Notes</span><label class="toggle-switch"><input type="checkbox" class="sync-chk" data-key="notes"><span class="toggle-slider"></span></label></div>
+        <div class="sync-toggle-row"><span class="sync-toggle-label">&#x1F476; Baby</span><label class="toggle-switch"><input type="checkbox" class="sync-chk" data-key="baby" checked><span class="toggle-slider"></span></label></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div class="overlay" id="settingsOverlay">
+  <div class="modal-box" style="position:relative">
+    <button class="modal-close" id="settingsClose" aria-label="Close settings">&#x2715;</button>
+    <div class="modal-title">&#9881;&#65039; Settings</div>
+    <div class="sync-section-title" style="margin-bottom:8px">Visible sections</div>
+    <div style="font-size:12px;color:#7A8772;margin-bottom:10px;line-height:1.5">Five on the bar, the rest under More. Lists, Recipes and Baby can&rsquo;t be hidden.</div>
+    <div id="sectionToggles">
+      <div class="sync-toggle-row">
+        <span class="sync-toggle-label">&#x1F3E0; Home dashboard</span>
+        <label class="toggle-switch"><input type="checkbox" class="section-chk" data-sec="home" checked><span class="toggle-slider"></span></label>
+      </div>
+      <div class="sync-toggle-row">
+        <span class="sync-toggle-label">&#x1F4AA; Train</span>
+        <label class="toggle-switch"><input type="checkbox" class="section-chk" data-sec="train"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="sync-toggle-row">
+        <span class="sync-toggle-label">&#x1F9F3; Trips</span>
+        <label class="toggle-switch"><input type="checkbox" class="section-chk" data-sec="trips" checked><span class="toggle-slider"></span></label>
+      </div>
+      <div class="sync-toggle-row">
+        <span class="sync-toggle-label">&#x1F4C8; Track</span>
+        <label class="toggle-switch"><input type="checkbox" class="section-chk" data-sec="track" checked><span class="toggle-slider"></span></label>
+      </div>
+      <div class="sync-toggle-row">
+        <span class="sync-toggle-label">&#x1FAB4; Plants</span>
+        <label class="toggle-switch"><input type="checkbox" class="section-chk" data-sec="plants"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="sync-toggle-row">
+        <span class="sync-toggle-label">&#x1F37F; Watchlist</span>
+        <label class="toggle-switch"><input type="checkbox" class="section-chk" data-sec="watch" checked><span class="toggle-slider"></span></label>
+      </div>
+      <div class="sync-toggle-row">
+        <span class="sync-toggle-label">&#x1F4E6; Home inventory</span>
+        <label class="toggle-switch"><input type="checkbox" class="section-chk" data-sec="appliances"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="sync-toggle-row">
+        <span class="sync-toggle-label">&#x1FA7A; Health</span>
+        <label class="toggle-switch"><input type="checkbox" class="section-chk" data-sec="health"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="sync-toggle-row">
+        <span class="sync-toggle-label">&#x1F528; Projects</span>
+        <label class="toggle-switch"><input type="checkbox" class="section-chk" data-sec="projects"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="sync-toggle-row">
+        <span class="sync-toggle-label">&#x26F3; Golf</span>
+        <label class="toggle-switch"><input type="checkbox" class="section-chk" data-sec="golf"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="sync-toggle-row">
+        <span class="sync-toggle-label">&#x26BD; Sports</span>
+        <label class="toggle-switch"><input type="checkbox" class="section-chk" data-sec="sports"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="sync-toggle-row">
+        <span class="sync-toggle-label">&#x1F4D6; Family Log</span>
+        <label class="toggle-switch"><input type="checkbox" class="section-chk" data-sec="famlog"><span class="toggle-slider"></span></label>
+      </div>
+    </div>
+    <div style="height:1px;background:#E8E4DC;margin:16px 0"></div>
+    <details id="customCatsDetails">
+      <summary style="font-size:13px;color:#7A8772;cursor:pointer;padding:4px 2px">&#x1F3F7;&#xFE0F; Custom categories</summary>
+      <div id="customCatsList" style="margin-top:10px"></div>
+    </details>
+    <div style="height:1px;background:#E8E4DC;margin:16px 0"></div>
+    <div class="sync-section-title" style="margin-bottom:8px">Import / Export</div>
+    <button class="sync-btn" id="exportBtn">&#x2B07;&#xFE0F; Export all data</button>
+    <div id="lastBackupInfo" style="font-size:12px;color:#8A7A5A;margin:-2px 2px 2px;text-align:center">Last backup: never</div>
+    <div id="lastCloudBackupInfo" style="font-size:12px;color:#8A7A5A;margin:0 2px 10px;text-align:center">Last cloud backup: never</div>
+    <button class="sync-btn outline" id="cloudBackupsBtn" style="margin-bottom:6px">&#x2601;&#xFE0F; Cloud backups</button>
+    <button class="sync-btn outline" id="syncHealthBtn" style="margin-bottom:6px">&#x1F4E1; Sync health</button>
+    <button class="sync-btn outline" id="forceUpdateBtn" style="margin-bottom:2px">&#x1F504; Force app update</button>
+    <div id="swVersionInfo" style="font-size:12px;color:#8A7A5A;margin:0 2px 8px;text-align:center"></div>
+    <label class="sync-btn outline" id="importLabel" style="text-align:center;cursor:pointer;display:block;margin-bottom:6px">
+      &#x2B06;&#xFE0F; Import data
+      <input type="file" id="importFile" accept=".json" style="display:none">
+    </label>
+    <div style="font-size:12px;color:#8A7A5A;line-height:1.45;margin:-2px 2px 8px;text-align:center">Restoring adds anything missing back &#8212; nothing is deleted. Deleted medicine records are not brought back, and which sections you show and share is left as it is.</div>
+    <div id="importStatus" style="font-size:13px;padding:8px 12px;border-radius:8px;display:none;margin-bottom:10px"></div>
+    <div style="height:1px;background:#E8E4DC;margin:16px 0"></div>
+    <button class="sync-btn outline" id="clearAllBtn" style="border-color:#C03030;color:#C03030">&#x1F5D1;&#xFE0F; Delete all my data</button>
+  </div>
+</div>
+
+<!-- Sports section (v308) — hideable, device-local, pull-on-open scoreboard -->
+<div id="sportsSection" style="display:none">
+  <div style="padding:14px 14px 100px" id="sportsContent"></div>
+</div>
+
+<!-- Family Log section (v338) — hideable, read-only feed built at render
+     time from data other sections already store; it logs nothing itself -->
+<div id="famlogSection" style="display:none">
+  <div style="padding:14px 14px 100px" id="famlogContent"></div>
+</div>
+
+<nav class="bottom-nav">
+  <button class="bn-btn home-active" id="bnHome" aria-label="Home">
+    <span class="bn-ico">&#x1F3E0;</span>Home
+  </button>
+  <button class="bn-btn" id="bnLife" aria-label="Lists">
+    <span class="bn-ico">&#x1F6D2;</span>Lists
+  </button>
+  <button class="bn-btn" id="bnTrain" aria-label="Train">
+    <span class="bn-ico">&#x1F4AA;</span>Train
+  </button>
+  <button class="bn-btn" id="bnRecipes" aria-label="Recipes">
+    <span class="bn-ico">&#x1F37D;</span>Recipes
+  </button>
+  <button class="bn-btn" id="bnBaby" aria-label="Baby">
+    <span class="bn-ico">&#x1F476;</span>Baby
+  </button>
+  <button class="bn-btn" id="bnTrips" aria-label="Trips">
+    <span class="bn-ico">&#x1F9F3;</span>Trips
+  </button>
+  <button class="bn-btn" id="bnTrack" aria-label="Track">
+    <span class="bn-ico">&#x1F4C8;</span>Track
+  </button>
+  <button class="bn-btn" id="bnPlants" aria-label="Plants" style="display:none">
+    <span class="bn-ico">&#x1FAB4;</span>Plants
+  </button>
+  <button class="bn-btn" id="bnWatch" aria-label="Watchlist">
+    <span class="bn-ico">&#x1F37F;</span>Watch
+  </button>
+  <button class="bn-btn" id="bnAppliances" aria-label="Home inventory" style="display:none">
+    <span class="bn-ico">&#x1F4E6;</span>Inventory
+  </button>
+  <button class="bn-btn" id="bnSports" aria-label="Sports" style="display:none">
+    <span class="bn-ico">&#x26BD;</span>Sports
+  </button>
+  <button class="bn-btn" id="bnFamlog" aria-label="Family Log" style="display:none">
+    <span class="bn-ico">&#x1F4D6;</span>Family
+  </button>
+  <button class="bn-btn" id="bnHealth" aria-label="Health" style="display:none">
+    <span class="bn-ico">&#x1FA7A;</span>Health
+  </button>
+  <button class="bn-btn" id="bnProjects" aria-label="Projects" style="display:none">
+    <span class="bn-ico">&#x1F528;</span>Projects
+  </button>
+  <button class="bn-btn" id="bnGolf" aria-label="Golf" style="display:none">
+    <span class="bn-ico">&#x26F3;</span>Golf
+  </button>
+  <!-- v452: overflow button. Hidden unless more than NAV_BAR_MAX sections are
+       on the bar; applySectionVisibility() decides. Kept LAST in the nav so it
+       always sits on the right, whichever sections are hidden. -->
+  <button class="bn-btn" id="bnMore" aria-label="More sections" style="display:none">
+    <span class="bn-ico" style="font-size:18px;letter-spacing:1px">&#x2022;&#x2022;&#x2022;</span>More
+  </button>
+</nav>
+
+<!-- MORE SECTIONS SHEET (v452) -->
+<div class="overlay" id="moreOverlay">
+  <div class="modal-box" style="position:relative">
+    <button class="modal-close" id="moreClose" aria-label="Close">&#x2715;</button>
+    <div class="modal-title">More</div>
+    <div id="moreList"></div>
+    <div style="font-size:12px;color:#7A8772;text-align:center;margin-top:14px;line-height:1.5">The bottom bar holds five sections &mdash; the rest live here. Change what&rsquo;s on it in Settings.</div>
+  </div>
+</div>
+
+<div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+<div id="updateBanner" style="display:none;position:fixed;bottom:70px;left:12px;right:12px;z-index:800;background:#1C3A5C;border:1px solid #3A6A9C;border-radius:12px;padding:12px 16px;align-items:center;gap:12px;box-shadow:0 4px 20px rgba(0,0,0,.4)">
+  <span style="flex:1;font-size:13px;color:#C0D8F0">&#x1F504; Update available</span>
+  <button onclick="window.location.reload()" style="background:#3A8FE0;border:none;color:#fff;border-radius:8px;padding:8px 14px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;touch-action:manipulation">Refresh</button>
+  <button onclick="document.getElementById('updateBanner').style.display='none'" style="background:none;border:none;color:#8AAAC0;font-size:18px;cursor:pointer;padding:0 4px;touch-action:manipulation">&#x2715;</button>
+</div>
+<div id="backupNudge" style="display:none;position:fixed;bottom:70px;left:12px;right:12px;max-width:456px;margin:0 auto;z-index:790;background:#2E4A2F;border:1px solid #4A6A4C;border-radius:12px;padding:12px 16px;align-items:center;gap:12px;box-shadow:0 4px 20px rgba(0,0,0,.35)">
+  <div style="flex:1;min-width:0">
+    <div style="font-weight:700;font-size:13px;color:#EAF3EA;margin-bottom:2px">&#x1F4BE; Time for a backup?</div>
+    <div id="backupNudgeSub" style="font-size:12px;color:#B8CBB8">It's been a while since your last export.</div>
+  </div>
+  <button id="backupNudgeNow" style="background:#7FB069;border:none;color:#11280F;border-radius:8px;padding:8px 12px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;touch-action:manipulation">Back up now</button>
+  <button id="backupNudgeLater" aria-label="Dismiss" style="background:none;border:none;color:#9FB89F;font-size:18px;cursor:pointer;padding:0 2px;touch-action:manipulation">&#x2715;</button>
+</div>
+<div id="mealPlanBanner" style="display:none;position:fixed;bottom:70px;left:12px;right:12px;max-width:456px;margin:0 auto;z-index:785;background:#5A3AA0;border:1px solid #7A5AC0;border-radius:12px;padding:12px 16px;align-items:center;gap:12px;box-shadow:0 4px 20px rgba(0,0,0,.35)">
+  <div style="flex:1;min-width:0;font-weight:700;font-size:13px;color:#F0EAFA">&#x1F4C5; New week — plan dinners?</div>
+  <button id="mealPlanBannerGo" style="background:#8A6AD0;border:none;color:#fff;border-radius:8px;padding:8px 12px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;touch-action:manipulation">Plan it</button>
+  <button id="mealPlanBannerLater" aria-label="Dismiss" style="background:none;border:none;color:#C0AAE0;font-size:18px;cursor:pointer;padding:0 2px;touch-action:manipulation">&#x2715;</button>
+</div>
+<div id="testBuildBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:1200;background:#B45309;color:#FFF7E6;text-align:center;font-size:12px;font-weight:700;letter-spacing:.3px;padding:5px 8px;pointer-events:none">&#x1F9EA; TEST BUILD &mdash; demo data &middot; sync off &middot; <span style="text-decoration:underline">tap to reset</span></div>
+<div id="seedTaintBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:1201;background:#991B1B;color:#FFF1F1;text-align:center;font-size:12px;font-weight:700;letter-spacing:.3px;padding:5px 8px;pointer-events:none">&#x26A0;&#xFE0F; DEMO DATA ON THIS DEVICE &mdash; sending is off &middot; <span style="text-decoration:underline">tap to clear</span></div>
+<div class="ver">v14</div>
+
+<script>
+<!--@include js/01-core.js-->
+<!--@include js/02-lists.js-->
+<!--@include js/03-plants.js-->
+<!--@include js/04-watchlist.js-->
+<!--@include js/05-health.js-->
+<!--@include js/06-projects.js-->
+<!--@include js/07-golf.js-->
+<!--@include js/08-inventory.js-->
+<!--@include js/09-trips.js-->
+<!--@include js/10-recipes-ingredients.js-->
+<!--@include js/11-recipes-tools.js-->
+<!--@include js/12-recipes-print-import.js-->
+<!--@include js/13-history-notes-actionlog.js-->
+<!--@include js/14-food-journal.js-->
+<!--@include js/15-track-settings-backup.js-->
+<!--@include js/16-sync.js-->
+<!--@include js/17-familylog-nav.js-->
+<!--@include js/18-sse-sessions-sheets.js-->
+<!--@include js/19-swipe-more.js-->
+<!--@include js/20-home.js-->
+<!--@include js/21-train.js-->
+<!--@include js/22-pullup-log-tdee.js-->
+<!--@include js/23-baby.js-->
+<!--@include js/24-medicine.js-->
+<!--@include js/25-milestones-teeth-bags.js-->
+<!--@include js/26-init-test-seed.js-->
+<!--@include js/27-boot-sw.js-->
+</script>
+
+<!-- DEBUG OVERLAY (temporary) -->
+<div id="dbgBox" style="display:none;position:fixed;bottom:70px;right:8px;z-index:9999;background:#1a0000;border:1.5px solid #ff4444;border-radius:10px;max-width:calc(100vw - 16px);max-height:50vh;overflow-y:auto;font-size:11px;font-family:monospace;color:#ff9999;padding:8px 10px;box-shadow:0 4px 20px rgba(0,0,0,.8)">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+    <strong style="color:#ff4444">&#x1F41B; Errors</strong>
+    <button onclick="document.getElementById('dbgBox').style.display='none'" style="background:none;border:none;color:#ff9999;font-size:16px;cursor:pointer;padding:0 4px">&#x2715;</button>
+  </div>
+  <div id="dbgLog"></div>
+</div>
+<div id="dbgBadge" style="display:none;position:fixed;bottom:75px;right:8px;z-index:10000;background:#ff4444;color:#fff;border-radius:50%;width:28px;height:28px;font-size:12px;font-weight:700;text-align:center;line-height:28px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.5)" onclick="document.getElementById('dbgBox').style.display='block';this.style.display='none'">!</div>
+
+<!-- Set logging bottom sheet -->
+<div id="setSheet" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:700;background:#fff;border-top:1.5px solid #E0DCD4;box-shadow:0 -4px 20px rgba(0,0,0,.12);border-radius:18px 18px 0 0;padding:18px 16px 32px;box-shadow:0 -8px 32px rgba(0,0,0,.6);max-width:480px;margin:0 auto">
+  <div style="width:36px;height:4px;background:#D8D0C0;border-radius:2px;margin:0 auto 16px"></div>
+  <div id="setSheetExName" style="font-size:16px;font-weight:700;color:#2A2010;margin-bottom:4px"></div>
+  <div id="setSheetSetLabel" style="font-size:12px;color:#8A7A5A;margin-bottom:16px"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+    <div>
+      <div style="font-size:11px;font-weight:700;color:#8A7A5A;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Weight (kg)</div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <button id="setSheetWtMinus" style="width:36px;height:36px;border:1.5px solid #D8D0C0;border-radius:8px;background:none;color:#3A3328;font-size:18px;cursor:pointer;touch-action:manipulation;flex-shrink:0">−</button>
+        <input id="setSheetWeight" type="number" min="0" step="0.5" inputmode="decimal" style="flex:1;padding:8px;border:1.5px solid #D8D0C0;border-radius:8px;background:#FDFAF3;color:#2A2010;font-size:18px;font-weight:700;text-align:center;font-family:inherit;outline:none;min-width:0">
+        <button id="setSheetWtPlus" style="width:36px;height:36px;border:1.5px solid #D8D0C0;border-radius:8px;background:none;color:#3A3328;font-size:18px;cursor:pointer;touch-action:manipulation;flex-shrink:0">+</button>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:11px;font-weight:700;color:#8A7A5A;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Reps</div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <button id="setSheetRepMinus" style="width:36px;height:36px;border:1.5px solid #D8D0C0;border-radius:8px;background:none;color:#3A3328;font-size:18px;cursor:pointer;touch-action:manipulation;flex-shrink:0">−</button>
+        <input id="setSheetReps" type="number" min="0" step="1" inputmode="numeric" style="flex:1;padding:8px;border:1.5px solid #D8D0C0;border-radius:8px;background:#FDFAF3;color:#2A2010;font-size:18px;font-weight:700;text-align:center;font-family:inherit;outline:none;min-width:0">
+        <button id="setSheetRepPlus" style="width:36px;height:36px;border:1.5px solid #D8D0C0;border-radius:8px;background:none;color:#3A3328;font-size:18px;cursor:pointer;touch-action:manipulation;flex-shrink:0">+</button>
+      </div>
+    </div>
+  </div>
+  <button id="setSheetLogBtn" style="width:100%;padding:14px;border:none;background:#3B6FE0;color:#fff;border-radius:11px;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;touch-action:manipulation">&#x2713; Log</button>
+  <button id="setSheetCancel" aria-label="Cancel set" style="width:100%;padding:10px;border:none;background:none;color:#8A7A5A;font-family:inherit;font-size:13px;cursor:pointer;touch-action:manipulation;margin-top:6px">Cancel</button>
+</div>
+<div id="setSheetBackdrop" style="display:none;position:fixed;inset:0;z-index:699;background:rgba(0,0,0,.4)"></div>
+
+<!-- Item detail sheet -->
+<div id="itemSheet" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:700;background:#fff;border-top:1.5px solid #E0DCD4;box-shadow:0 -4px 20px rgba(0,0,0,.12);border-radius:18px 18px 0 0;padding:18px 16px 36px;box-shadow:0 -8px 32px rgba(0,0,0,.6);max-width:480px;margin:0 auto;max-height:85vh;overflow-y:auto">
+  <div style="width:36px;height:4px;background:#F0EBE0;border-radius:2px;margin:0 auto 14px"></div>
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+    <div style="flex:1;font-size:13px;font-weight:700;color:#8A7A5A;text-transform:uppercase;letter-spacing:.5px">Edit item</div>
+    <button id="itemSheetClose" aria-label="Close" style="border:none;background:none;color:#8A7A5A;font-size:20px;cursor:pointer;padding:0 4px;touch-action:manipulation">&#x2715;</button>
+  </div>
+  <div style="margin-bottom:12px">
+    <div style="font-size:11px;font-weight:700;color:#8A7A5A;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Name</div>
+    <input id="itemSheetNameInput" type="text" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid #D8D0C0;border-radius:10px;background:#FDFAF3;color:#2A2010;font-family:inherit;font-size:15px;font-weight:600;outline:none">
+  </div>
+  <div style="margin-bottom:12px" id="itemSheetAmountRow">
+    <div style="font-size:11px;font-weight:700;color:#8A7A5A;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Amount <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#A0906A">(e.g. 200 g, 1 can)</span></div>
+    <input id="itemSheetAmountInput" type="text" placeholder="e.g. 200 g" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid #D8D0C0;border-radius:10px;background:#FDFAF3;color:#3A3328;font-family:inherit;font-size:14px;outline:none">
+  </div>
+  <div style="margin-bottom:12px" id="itemSheetDueRow">
+    <div style="font-size:11px;font-weight:700;color:#8A7A5A;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Due date</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input id="itemSheetDueInput" type="date" style="flex:1;box-sizing:border-box;padding:10px 12px;border:1.5px solid #D8D0C0;border-radius:10px;background:#FDFAF3;color:#3A3328;font-family:inherit;font-size:14px;outline:none">
+      <button id="itemSheetDueClear" style="border:none;background:#F0EBE0;color:#8A7A5A;border-radius:8px;padding:10px 12px;font-family:inherit;font-size:13px;cursor:pointer">Clear</button>
+    </div>
+  </div>
+  <div style="margin-bottom:12px;display:none" id="itemSheetRepeatRow">
+    <div style="font-size:11px;font-weight:700;color:#8A7A5A;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Repeat</div>
+    <select id="itemSheetRepeatSelect" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid #D8D0C0;border-radius:10px;background:#FDFAF3;color:#3A3328;font-family:inherit;font-size:14px;outline:none">
+      <option value="">Doesn't repeat</option>
+      <option value="daily">Daily</option>
+      <option value="weekly">Weekly</option>
+      <option value="biweekly">Every 2 weeks</option>
+      <option value="monthly">Monthly</option>
+    </select>
+    <div style="font-size:11px;color:#A0906A;margin-top:5px">Needs a due date. Ticking it done reschedules it to the next due date instead of finishing it.</div>
+  </div>
+  <div style="margin-bottom:12px;display:none" id="itemSheetTrackLogWrap">
+    <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid #D8D0C0;border-radius:10px;background:#FDFAF3;cursor:pointer">
+      <input id="itemSheetTrackLogToggle" type="checkbox" style="width:20px;height:20px;flex-shrink:0;accent-color:#3B6FE0;cursor:pointer">
+      <span style="font-size:14px;color:#3A3328">Log to Track when done</span>
+    </label>
+  </div>
+  <div style="margin-bottom:12px">
+    <div style="font-size:11px;font-weight:700;color:#8A7A5A;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Notes</div>
+    <textarea id="itemSheetNotes" placeholder="Add notes..." rows="4" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid #D8D0C0;border-radius:10px;background:#FDFAF3;color:#3A3328;font-family:inherit;font-size:14px;resize:vertical;outline:none;line-height:1.5"></textarea>
+  </div>
+  <div style="margin-bottom:12px">
+    <div style="font-size:11px;font-weight:700;color:#8A7A5A;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Link (optional)</div>
+    <input id="itemSheetLink" type="url" inputmode="url" placeholder="Paste a link (e.g. OneDrive file)" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid #D8D0C0;border-radius:10px;background:#FDFAF3;color:#3A3328;font-family:inherit;font-size:14px;outline:none">
+  </div>
+  <div id="itemSheetTagsWrap" style="display:none;margin-bottom:12px">
+    <div style="font-size:11px;font-weight:700;color:#8A7A5A;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Tags</div>
+    <div id="itemSheetTagsChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+    <div style="display:flex;gap:6px">
+      <input id="itemSheetNewTag" type="text" placeholder="Add a tag (e.g. abroad)" style="flex:1;box-sizing:border-box;padding:9px 12px;border:1.5px solid #D8D0C0;border-radius:10px;background:#FDFAF3;color:#3A3328;font-family:inherit;font-size:14px;outline:none">
+      <button id="itemSheetAddTag" style="border:none;background:#5A7BC0;color:#fff;border-radius:9px;padding:9px 14px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer">Add</button>
+    </div>
+  </div>
+  <div id="itemSheetPPWrap" style="display:none;margin-bottom:12px">
+    <div style="font-size:11px;font-weight:700;color:#8A7A5A;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Per-person checks</div>
+    <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid #D8D0C0;border-radius:10px;background:#FDFAF3;cursor:pointer">
+      <input id="itemSheetPPToggle" type="checkbox" style="width:20px;height:20px;flex-shrink:0;accent-color:#3B6FE0;cursor:pointer">
+      <span style="font-size:14px;color:#3A3328">Tick off C / P / &#x1F476; separately for this item</span>
+    </label>
+  </div>
+
+  <button id="itemSheetSave" style="width:100%;padding:13px;border:none;background:#3B6FE0;color:#fff;border-radius:11px;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;touch-action:manipulation">Save</button>
+</div>
+<div id="itemSheetBackdrop" style="display:none;position:fixed;inset:0;z-index:699;background:rgba(0,0,0,.5)"></div>
+
+<div id="importBackdrop" style="display:none;position:fixed;inset:0;z-index:709;background:rgba(0,0,0,.5)"></div>
+<div id="importSheet" style="display:none;position:fixed;left:0;right:0;bottom:0;z-index:710;background:#fff;border-top:1.5px solid #E0DCD4;box-shadow:0 -4px 20px rgba(0,0,0,.12);border-radius:18px 18px 0 0;padding:18px 16px 24px;max-width:480px;margin:0 auto;max-height:80vh;overflow-y:auto">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+    <div style="flex:1;font-size:13px;font-weight:700;color:#5A6455;text-transform:uppercase;letter-spacing:.5px">Import items</div>
+    <button id="importClose" aria-label="Close" style="border:none;background:none;color:#8A7A5A;font-size:20px;cursor:pointer;padding:0 4px;touch-action:manipulation">&#x2715;</button>
+  </div>
+  <div style="font-size:13px;color:#8A7A5A;margin-bottom:10px;line-height:1.5">Paste or type one item per line. They'll be added to the current list and auto-sorted into categories.</div>
+  <div id="savedRecipesWrap" style="display:none;margin-bottom:12px">
+    <div style="font-size:11px;font-weight:700;color:#8A7A5A;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Saved recipes &middot; tap to load</div>
+    <div id="savedRecipesList" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+  </div>
+  <input id="importTag" type="text" placeholder="Recipe tag (optional, e.g. Bolognese)" style="width:100%;box-sizing:border-box;padding:10px 13px;border:1.5px solid #D8D0C0;border-radius:10px;background:#FDFAF3;color:#2A2010;font-family:inherit;font-size:14px;outline:none;margin-bottom:8px">
+  <textarea id="importText" rows="10" placeholder="Salmon fillets x3&#10;Broccoli&#10;Greek yogurt&#10;Quinoa&#10;..." style="width:100%;box-sizing:border-box;padding:11px 13px;border:1.5px solid #D8D0C0;border-radius:10px;background:#FDFAF3;color:#2A2010;font-family:inherit;font-size:14px;resize:vertical;outline:none;line-height:1.6"></textarea>
+  <div style="display:flex;gap:8px;margin-top:12px">
+    <button id="importDoBtn" style="flex:1;padding:12px;background:#2D6B35;border:none;border-radius:10px;color:#fff;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer">Add items</button>
+    <button id="importCancel" style="padding:12px 18px;background:#F0EBE0;border:none;border-radius:10px;color:#8A7A5A;font-family:inherit;font-size:14px;cursor:pointer">Cancel</button>
+  </div>
+</div>
+
+<div id="recipeImportBackdrop" style="display:none;position:fixed;inset:0;z-index:719;background:rgba(0,0,0,.5)"></div>
+<div id="recipeImportSheet" style="display:none;position:fixed;left:0;right:0;bottom:0;z-index:720;background:#fff;border-top:1.5px solid #E0DCD4;box-shadow:0 -4px 20px rgba(0,0,0,.12);border-radius:18px 18px 0 0;padding:18px 16px 24px;max-width:480px;margin:0 auto;max-height:85vh;overflow-y:auto">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+    <div style="flex:1;font-size:13px;font-weight:700;color:#5A6455;text-transform:uppercase;letter-spacing:.5px">Import recipes</div>
+    <button id="recipeImportClose" aria-label="Close" style="border:none;background:none;color:#8A7A5A;font-size:20px;cursor:pointer;padding:0 4px">&#x2715;</button>
+  </div>
+  <div style="font-size:13px;color:#8A7A5A;margin-bottom:10px;line-height:1.5">Paste a recipe CSV export (including the header row), or an AI chat's reply to the prompt below.</div>
+  <div style="font-size:12px;color:#7A5A30;background:#FBF4E8;border:1px solid #E4D3B0;border-radius:10px;padding:10px 12px;margin-bottom:10px;line-height:1.6">
+    <b>No CSV? Ask an AI chat to convert one.</b>
+    <div style="margin-top:4px">1. Copy the prompt below.</div>
+    <div>2. Paste it into an AI chat along with the recipe — text, a photo, or a link.</div>
+    <div>3. Paste its JSON reply into the box below and hit Import.</div>
+  </div>
+  <button id="recipeCopyPrompt" style="width:100%;padding:11px;border:1.5px solid #B5651D;background:#fff;color:#B5651D;border-radius:10px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:6px">&#x1F4CB; Copy the prompt</button>
+  <details style="margin-bottom:12px"><summary style="font-size:12px;color:#8A7A5A;cursor:pointer;padding:4px 2px">See the prompt</summary>
+    <textarea id="recipePromptText" readonly rows="10" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid #D8D0C0;border-radius:10px;background:#FDFAF3;color:#2A2010;font-family:monospace;font-size:11px;outline:none;margin-top:8px;resize:vertical;line-height:1.5"></textarea>
+  </details>
+  <textarea id="recipeImportText" rows="9" placeholder="Paste CSV or the AI's JSON reply here&hellip;" style="width:100%;box-sizing:border-box;padding:11px 13px;border:1.5px solid #D8D0C0;border-radius:10px;background:#FDFAF3;color:#2A2010;font-family:inherit;font-size:13px;resize:vertical;outline:none;line-height:1.5"></textarea>
+  <div id="recipeImportPreview" style="font-size:13px;color:#7A5A30;margin-top:8px"></div>
+  <div style="display:flex;gap:8px;margin-top:12px">
+    <button id="recipeImportDo" style="flex:1;padding:12px;background:#B5651D;border:none;border-radius:10px;color:#fff;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer">Import</button>
+    <button id="recipeImportCancel" style="padding:12px 18px;background:#F0EBE0;border:none;border-radius:10px;color:#8A7A5A;font-family:inherit;font-size:14px;cursor:pointer">Cancel</button>
+  </div>
+</div>
+
+</body>
+</html>

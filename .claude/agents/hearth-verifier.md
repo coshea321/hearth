@@ -31,8 +31,9 @@ run in CI. **Do not re-implement any of its checks by hand, and do not
 say so in your report; changing what gets checked is a deliberate edit to
 the script, not something to improvise per run.
 
-Its checks: `node --check` on the extracted main script block, DOCTYPE and
-`<html lang>` counts, exactly one version label, clean EOF, the
+Its checks: the built `index.html` matches a fresh `node build.js` of `src/`
+(stale or hand-edited built file = FAIL), `node --check` on the extracted main script block, DOCTYPE and
+`<html lang>` counts, exactly one version label (in `index.html` and in `src/`), clean EOF, the
 document-doubling size ratio against the base branch, sw.js/index.html
 version agreement, the version-bump requirement when app files changed, the
 dosing literal pins, duplicate top-level function names, and two warn-only
@@ -42,8 +43,9 @@ quirk checks. It prints `::error::` lines for failures and ends with
 ## The one check that is yours, not the script's
 
 **Edits landed.** If the invoking prompt lists strings or patterns that were
-just edited, grep `index.html` (and/or `sw.js`) for each and confirm it
-appears. A script can't know what this session intended to change, so this
+just edited, grep `src/` (and/or `sw.js`) for each and confirm it
+appears — the source is where an edit must land; the build-match check
+then proves the built `index.html` carries it. A script can't know what this session intended to change, so this
 is the only judgement call in the job. Silent no-op edits have caused real
 incidents here — treat a missing string as a hard FAIL.
 
@@ -52,7 +54,8 @@ strings to check.
 
 ## Docs-only changes
 
-If neither `index.html` nor `sw.js` differs from the base branch, say so.
+If none of `index.html`, `sw.js`, `src/` or `build.js` differs from the base
+branch, say so.
 `tests/checks.sh` handles this correctly on its own — it skips the bump
 requirement and reports the app files as unchanged — so just run it as
 normal and report what it says.
