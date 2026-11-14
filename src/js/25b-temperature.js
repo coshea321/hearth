@@ -104,8 +104,9 @@ function renderTempPanel(container, opts) {
   var fold = function(k){ return opts.foldKey ? " data-fold='"+opts.foldKey+k+"'" : ""; };
   var inputCss = "border:1.5px solid #E0DCD4;border-radius:9px;padding:10px 12px;background:#FDFAF3;color:#2A2010;font-family:inherit;font-size:14px;outline:none;width:100%;box-sizing:border-box";
   var methodOpts = "<option value=''>Method (optional)</option>" + TEMP_METHODS.map(function(m){ return "<option value='"+m+"'>"+m+"</option>"; }).join("");
-  var html = "<div class='"+opts.cardClass+"'"+fold("log")+">" +
-      "<div class='"+opts.titleClass+"'>&#x1F321;&#xFE0F; Log temperature</div>" +
+  var oneCard = !!opts.foldKey;   // Body: log + history fold together as one card (Baby keeps two)
+  var html = "<div class='"+opts.cardClass+"'"+fold("")+">" +
+      "<div class='"+opts.titleClass+"'>&#x1F321;&#xFE0F; "+(oneCard ? "Temperature" : "Log temperature")+"</div>" +
       "<div style='display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px'>" +
         "<div style='display:flex;align-items:center;gap:6px'><input id='"+p+"TempVal' type='number' min='34' max='43' step='0.1' inputmode='decimal' placeholder='e.g. 37.8' style='"+inputCss+"'><span style='font-size:14px;color:#8A7A5A;font-weight:700'>&deg;C</span></div>" +
         "<select id='"+p+"TempMethod' style='"+inputCss+"'>"+methodOpts+"</select>" +
@@ -114,8 +115,9 @@ function renderTempPanel(container, opts) {
       "<div style='margin-bottom:8px'><input id='"+p+"TempNote' type='text' placeholder='Notes (optional)' autocomplete='off' style='"+inputCss+"'></div>" +
       "<button class='"+opts.btnClass+"' id='"+p+"TempLogBtn'>Log</button>" +
       "<div style='font-size:12px;color:#7A4A18;line-height:1.4;margin-top:10px;padding:8px 10px;background:#FDF0E0;border-radius:8px'>Under 3 months and 38&deg;C or more, or if you&rsquo;re worried &mdash; contact your GP or 112.</div>" +
-    "</div>";
-  html += "<div class='"+opts.cardClass+"'"+fold("hist")+">" +
+    (oneCard ? "" : "</div>");
+  html += oneCard ? "<div style='margin-top:14px'>" :
+    "<div class='"+opts.cardClass+"'>" +
     "<div class='"+opts.titleClass+"'>&#x1F4C8; Temperature history</div>";
   if (!readings.length) {
     html += "<p style='text-align:center;color:#A89A80;padding:20px;font-size:14px;margin:0'>No readings yet.</p>";
@@ -133,7 +135,7 @@ function renderTempPanel(container, opts) {
         "<button class='bw-entry-del temp-del' data-tempkey='"+esc(String(r.key))+"' aria-label='Delete reading'>&#x2715;</button></div>";
     });
   }
-  html += "</div>";
+  html += oneCard ? "</div></div>" : "</div>";
   container.innerHTML = html;
 
   document.getElementById(p+"TempLogBtn").addEventListener("click", function(){
