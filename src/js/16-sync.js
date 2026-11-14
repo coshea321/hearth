@@ -499,7 +499,10 @@ function pushPersonal() {
   clearTimeout(_pushPersonalTimer);
   _pushPersonalTimer = setTimeout(function() {
 var d = {};
-  d.health = getWD();
+  // v519: workouts/bodyweight/BP/temps travel as `workouts`. They used to go
+  // as `health`, which the fl4_health line further down overwrote, so they
+  // never reached another device. Do NOT move them back under `health`.
+  d.workouts = getWD();
   ["grocery","todo","travel","personal"].forEach(function(lt) {
     var ld = listData[lt], notes = storeGet("fl4_notes_" + lt) || [];
     if (ld) d["list_" + lt] = { items:ld.items, hist:ld.hist, notes:notes, customCats:getCustomCats(lt), deleted:purgeTombs(getTombs(lt)), histDeleted:purgeTombs(getTombs(histTombKey(lt))) };
@@ -596,7 +599,7 @@ function flushSyncRenders(dirty) {
   // Log click handler (medHistoryFor), so the advisory is computed when Log is
   // pressed and is never stale — only the displayed panel is, and it refreshes
   // on the next sync after logging.
-  if (dirty.baby    && currentSection === "baby" && !medDraftOpen())     safeRender("baby",    renderBabyView);
+  if (dirty.baby    && currentSection === "baby" && !medDraftOpen() && !tempDraftOpen()) safeRender("baby", renderBabyView);
   // Lists: unchanged except for the section guard. switchSection() re-renders
   // the list on entry, so skipping it while hidden can't leave a stale view.
   if (dirty.list    && currentSection === "lists")                      safeRender("list",    renderList);
@@ -614,9 +617,15 @@ function applyPersonal(d) {
   try {
 
   // ── Workouts: merge by workout ID, not last-write-wins ───────────────────
-  if (d.health && typeof d.health === "object") {
+  // v519: read `workouts` (see pushPersonal). `health` is the fl4_health ARRAY
+  // since v449 — taking it as workouts copied its records into fl4_workouts
+  // as "0","1",… keys, which the merge below now strips.
+  // A non-array `health` is the pre-v449 shape (workouts under `health`), still accepted.
+  function _isWD(x){ return !!(x && typeof x === "object" && !Array.isArray(x)); }
+  var _remoteWD = _isWD(d.workouts) ? d.workouts : (_isWD(d.health) ? d.health : null);
+  if (_remoteWD) {
     var localWD  = getWD();
-    var remoteWD = d.health;
+    var remoteWD = _remoteWD;
     var localWkts  = Array.isArray(localWD.workouts)  ? localWD.workouts  : [];
     var remoteWkts = Array.isArray(remoteWD.workouts) ? remoteWD.workouts : [];
     var wIdx = {};
@@ -640,12 +649,14 @@ function applyPersonal(d) {
     // remoteWD+localWD (remote first, local overwrites — same precedence as
     // the workouts/bodyweight/bp merges above) so unknown keys carry through
     // from whichever side has them.
-    storeSet("fl4_workouts", Object.assign({}, remoteWD, localWD, {
+    var mergedWD = Object.assign({}, remoteWD, localWD, {
       workouts: Object.values(wIdx).sort(function(a,b){ return (b.date||"").localeCompare(a.date||""); }),
       bodyweight: Object.values(bwIdx).sort(function(a,b){ return (b.date||"").localeCompare(a.date||""); }),
       bp: Object.values(bpIdx).sort(function(a,b){ return (b.ts||0)-(a.ts||0); }),
       temps: Object.values(tpIdx).sort(function(a,b){ return (b.ts||0)-(a.ts||0); })
-    }));
+    });
+    Object.keys(mergedWD).forEach(function(k){ if (/^\d+$/.test(k)) delete mergedWD[k]; });
+    storeSet("fl4_workouts", mergedWD);
   }
 
   // ── Lists: merge remote + local by item ID (union, no overwrites) ─────────

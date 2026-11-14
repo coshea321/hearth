@@ -18573,7 +18573,10 @@ function pushPersonal() {
   clearTimeout(_pushPersonalTimer);
   _pushPersonalTimer = setTimeout(function() {
 var d = {};
-  d.health = getWD();
+  // v519: workouts/bodyweight/BP/temps travel as `workouts`. They used to go
+  // as `health`, which the fl4_health line further down overwrote, so they
+  // never reached another device. Do NOT move them back under `health`.
+  d.workouts = getWD();
   ["grocery","todo","travel","personal"].forEach(function(lt) {
     var ld = listData[lt], notes = storeGet("fl4_notes_" + lt) || [];
     if (ld) d["list_" + lt] = { items:ld.items, hist:ld.hist, notes:notes, customCats:getCustomCats(lt), deleted:purgeTombs(getTombs(lt)), histDeleted:purgeTombs(getTombs(histTombKey(lt))) };
@@ -18670,7 +18673,7 @@ function flushSyncRenders(dirty) {
   // Log click handler (medHistoryFor), so the advisory is computed when Log is
   // pressed and is never stale — only the displayed panel is, and it refreshes
   // on the next sync after logging.
-  if (dirty.baby    && currentSection === "baby" && !medDraftOpen())     safeRender("baby",    renderBabyView);
+  if (dirty.baby    && currentSection === "baby" && !medDraftOpen() && !tempDraftOpen()) safeRender("baby", renderBabyView);
   // Lists: unchanged except for the section guard. switchSection() re-renders
   // the list on entry, so skipping it while hidden can't leave a stale view.
   if (dirty.list    && currentSection === "lists")                      safeRender("list",    renderList);
@@ -18688,9 +18691,15 @@ function applyPersonal(d) {
   try {
 
   // ── Workouts: merge by workout ID, not last-write-wins ───────────────────
-  if (d.health && typeof d.health === "object") {
+  // v519: read `workouts` (see pushPersonal). `health` is the fl4_health ARRAY
+  // since v449 — taking it as workouts copied its records into fl4_workouts
+  // as "0","1",… keys, which the merge below now strips.
+  // A non-array `health` is the pre-v449 shape (workouts under `health`), still accepted.
+  function _isWD(x){ return !!(x && typeof x === "object" && !Array.isArray(x)); }
+  var _remoteWD = _isWD(d.workouts) ? d.workouts : (_isWD(d.health) ? d.health : null);
+  if (_remoteWD) {
     var localWD  = getWD();
-    var remoteWD = d.health;
+    var remoteWD = _remoteWD;
     var localWkts  = Array.isArray(localWD.workouts)  ? localWD.workouts  : [];
     var remoteWkts = Array.isArray(remoteWD.workouts) ? remoteWD.workouts : [];
     var wIdx = {};
@@ -18714,12 +18723,14 @@ function applyPersonal(d) {
     // remoteWD+localWD (remote first, local overwrites — same precedence as
     // the workouts/bodyweight/bp merges above) so unknown keys carry through
     // from whichever side has them.
-    storeSet("fl4_workouts", Object.assign({}, remoteWD, localWD, {
+    var mergedWD = Object.assign({}, remoteWD, localWD, {
       workouts: Object.values(wIdx).sort(function(a,b){ return (b.date||"").localeCompare(a.date||""); }),
       bodyweight: Object.values(bwIdx).sort(function(a,b){ return (b.date||"").localeCompare(a.date||""); }),
       bp: Object.values(bpIdx).sort(function(a,b){ return (b.ts||0)-(a.ts||0); }),
       temps: Object.values(tpIdx).sort(function(a,b){ return (b.ts||0)-(a.ts||0); })
-    }));
+    });
+    Object.keys(mergedWD).forEach(function(k){ if (/^\d+$/.test(k)) delete mergedWD[k]; });
+    storeSet("fl4_workouts", mergedWD);
   }
 
   // ── Lists: merge remote + local by item ID (union, no overwrites) ─────────
@@ -26327,7 +26338,7 @@ function renderTempPanel(container, opts) {
         "<div style='display:flex;align-items:center;gap:6px'><input id='"+p+"TempVal' type='number' min='34' max='43' step='0.1' inputmode='decimal' placeholder='e.g. 37.8' style='"+inputCss+"'><span style='font-size:14px;color:#8A7A5A;font-weight:700'>&deg;C</span></div>" +
         "<select id='"+p+"TempMethod' style='"+inputCss+"'>"+methodOpts+"</select>" +
       "</div>" +
-      "<div style='margin-bottom:8px'><input id='"+p+"TempDt' type='datetime-local' value='"+localDatetimeValue()+"' style='"+inputCss+"'></div>" +
+      "<div style='margin-bottom:8px'><input id='"+p+"TempDt' type='datetime-local' value='"+localDatetimeValue()+"' data-init='"+localDatetimeValue()+"' style='"+inputCss+"'></div>" +
       "<div style='margin-bottom:8px'><input id='"+p+"TempNote' type='text' placeholder='Notes (optional)' autocomplete='off' style='"+inputCss+"'></div>" +
       "<button class='"+opts.btnClass+"' id='"+p+"TempLogBtn'>Log</button>" +
       "<div style='font-size:12px;color:#7A4A18;line-height:1.4;margin-top:10px;padding:8px 10px;background:#FDF0E0;border-radius:8px'>Under 3 months and 38&deg;C or more, or if you&rsquo;re worried &mdash; contact your GP or 112.</div>" +
@@ -26375,6 +26386,19 @@ function renderTempPanel(container, opts) {
   });
 }
 
+// Sync guard (v519, mirrors medDraftOpen): an incoming Baby update must not
+// rebuild Baby → Temp while a reading is half-entered — including a time
+// changed from the pre-filled "now". Skipping the refresh only delays the
+// history list; the next sync or tab switch redraws it.
+function tempDraftOpen() {
+  if (currentBabyView !== "temp") return false;
+  var dt = document.getElementById("babyTempDt");
+  if (dt && dt.value !== dt.dataset.init) return true;
+  return ["babyTempVal","babyTempMethod","babyTempNote"].some(function(id){
+    var el = document.getElementById(id);
+    return !!(el && el.value.trim());
+  });
+}
 function renderBabyTemp() {
   renderTempPanel(document.getElementById("babyTempView"), {
     person:"daughter", idPrefix:"baby", cardClass:"baby-log-card", titleClass:"baby-card-title", btnClass:"baby-log-btn",

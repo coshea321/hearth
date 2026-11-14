@@ -88,9 +88,54 @@ module.exports = {
       document.querySelector('#trainBodyView .bw-card[data-fold="bplog"] .bw-card-title').click();
       ok('fold: tap again unfolds', !document.querySelector('#trainBodyView .bw-card[data-fold="bplog"]').classList.contains('folded'), 'still folded');
 
+      // ── Incoming sync must not wipe a half-entered Baby → Temp reading ──
+      switchSection('baby');
+      currentBabyView = 'temp';
+      renderBabyView();
+      ok('draft guard: empty form is not a draft', tempDraftOpen() === false, 'true on a fresh form');
+      document.getElementById('babyTempVal').value = '38.0';
+      ok('draft guard: typed value is a draft', tempDraftOpen() === true, 'false');
+      flushSyncRenders({ baby: true });
+      ok('draft guard: sync redraw skipped, value kept', document.getElementById('babyTempVal').value === '38.0', 'wiped');
+      renderBabyView();
+      var dt = document.getElementById('babyTempDt');
+      dt.value = '2026-01-01T03:00';
+      ok('draft guard: a changed time alone is a draft', tempDraftOpen() === true, 'false');
+
+      // ── Received payload: `workouts` carries temps; the fl4_health array under `health` never pollutes workouts ──
+      var wd0 = getWD(); wd0.temps = []; saveWD(wd0);
+      applyPersonal({ workouts: { workouts: [], bodyweight: [], bp: [], temps: [{ ts: 1700000000000, date: '2023-11-14', temp: 37.3, method: '', note: '', person: 'wife' }] },
+                      health: [{ id: 'h1', kind: 'visit', title: 'x', updated: 1 }] });
+      var wd1 = getWD();
+      ok('applyPersonal: remote temps merged from `workouts`', (wd1.temps || []).some(function(t){ return t.ts === 1700000000000 && t.person === 'wife'; }), 'got: ' + JSON.stringify(wd1.temps));
+      ok('applyPersonal: no "0","1"… keys from the health array', !Object.keys(wd1).some(function(k){ return /^\\d+$/.test(k); }), 'keys: ' + Object.keys(wd1).join(','));
+
       document.getElementById('trackPerson').value = 'me';
       return {pass:pass, fail:fail};
     })()`);
+
+    // ── Outgoing payload: workouts (with temps) travel as `workouts`, not lost under `health` ──
+    const sent = await page.evaluate(`new Promise(function(resolve){
+      var wd = getWD(); wd.temps = [{ ts: 1700000001000, date: '2023-11-14', temp: 37.7, method: 'Ear', note: '' }]; saveWD(wd);
+      var keep = { ff: firebaseFetch, li: isLoggedIn, pf: _personalFetchOk, sp: syncPaused, st: _seedTainted };
+      var body = null;
+      firebaseFetch = function(url, opts){ if (opts && opts.method === 'PUT' && /\\/data/.test(String(url))) body = opts.body; return Promise.resolve({ ok: true, status: 200, json: function(){ return Promise.resolve(null); } }); };
+      isLoggedIn = function(){ return true; };
+      _personalFetchOk = true; syncPaused = false; _seedTainted = false;
+      pushPersonal();
+      setTimeout(function(){
+        firebaseFetch = keep.ff; isLoggedIn = keep.li; _personalFetchOk = keep.pf; syncPaused = keep.sp; _seedTainted = keep.st;
+        resolve(body);
+      }, 1200);
+    })`);
+    let payload = null;
+    try { payload = JSON.parse(sent); } catch (e) {}
+    const okTemps = !!(payload && payload.workouts && Array.isArray(payload.workouts.temps) && payload.workouts.temps.some(t => t.ts === 1700000001000));
+    if (okTemps) result.pass.push('pushPersonal: temps sent under `workouts`');
+    else result.fail.push({ name: 'pushPersonal: temps sent under `workouts`', detail: 'payload: ' + String(sent).slice(0, 300) });
+    const okHealth = !!(payload && Array.isArray(payload.health));
+    if (okHealth) result.pass.push('pushPersonal: `health` is still the fl4_health array');
+    else result.fail.push({ name: 'pushPersonal: `health` is still the fl4_health array', detail: 'payload.health: ' + JSON.stringify(payload && payload.health).slice(0, 200) });
     return result;
   },
 };

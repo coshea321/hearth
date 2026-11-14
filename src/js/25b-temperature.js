@@ -110,7 +110,7 @@ function renderTempPanel(container, opts) {
         "<div style='display:flex;align-items:center;gap:6px'><input id='"+p+"TempVal' type='number' min='34' max='43' step='0.1' inputmode='decimal' placeholder='e.g. 37.8' style='"+inputCss+"'><span style='font-size:14px;color:#8A7A5A;font-weight:700'>&deg;C</span></div>" +
         "<select id='"+p+"TempMethod' style='"+inputCss+"'>"+methodOpts+"</select>" +
       "</div>" +
-      "<div style='margin-bottom:8px'><input id='"+p+"TempDt' type='datetime-local' value='"+localDatetimeValue()+"' style='"+inputCss+"'></div>" +
+      "<div style='margin-bottom:8px'><input id='"+p+"TempDt' type='datetime-local' value='"+localDatetimeValue()+"' data-init='"+localDatetimeValue()+"' style='"+inputCss+"'></div>" +
       "<div style='margin-bottom:8px'><input id='"+p+"TempNote' type='text' placeholder='Notes (optional)' autocomplete='off' style='"+inputCss+"'></div>" +
       "<button class='"+opts.btnClass+"' id='"+p+"TempLogBtn'>Log</button>" +
       "<div style='font-size:12px;color:#7A4A18;line-height:1.4;margin-top:10px;padding:8px 10px;background:#FDF0E0;border-radius:8px'>Under 3 months and 38&deg;C or more, or if you&rsquo;re worried &mdash; contact your GP or 112.</div>" +
@@ -158,6 +158,19 @@ function renderTempPanel(container, opts) {
   });
 }
 
+// Sync guard (v519, mirrors medDraftOpen): an incoming Baby update must not
+// rebuild Baby → Temp while a reading is half-entered — including a time
+// changed from the pre-filled "now". Skipping the refresh only delays the
+// history list; the next sync or tab switch redraws it.
+function tempDraftOpen() {
+  if (currentBabyView !== "temp") return false;
+  var dt = document.getElementById("babyTempDt");
+  if (dt && dt.value !== dt.dataset.init) return true;
+  return ["babyTempVal","babyTempMethod","babyTempNote"].some(function(id){
+    var el = document.getElementById(id);
+    return !!(el && el.value.trim());
+  });
+}
 function renderBabyTemp() {
   renderTempPanel(document.getElementById("babyTempView"), {
     person:"daughter", idPrefix:"baby", cardClass:"baby-log-card", titleClass:"baby-card-title", btnClass:"baby-log-btn",
