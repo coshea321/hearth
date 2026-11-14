@@ -863,7 +863,7 @@ function renderTdeeCard() {
   var el = document.getElementById("tdeeCard");
   if (!el) return;
   var p = getProfile(), kg = tdeeCurrentKg(), g = tdeeGoal();
-  var h = "<div class='bw-card'>" +
+  var h = "<div class='bw-card' data-fold='tdee'>" +
     "<div class='bw-card-title' style='display:flex;align-items:center;gap:8px'>" +
       "<span style='flex:1'>&#x1F525; Daily Calories</span>" +
       "<button id='tdeeEdit' style='padding:5px 10px;background:none;border:1.5px solid #C4A07A;border-radius:7px;color:#A05A10;font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;touch-action:manipulation'>" +
@@ -951,6 +951,7 @@ function renderTdeeCard() {
 
   h += "</div>";
   el.innerHTML = h;
+  applyBodyFolds();   // v519: keep this card's folded state when it re-renders on its own
 
   var editBtn = document.getElementById("tdeeEdit");
   if (editBtn) editBtn.addEventListener("click", openTdeeEditor);
@@ -1189,5 +1190,11 @@ function renderBodyView() {
       picker.querySelector("._bpCancel").addEventListener("click", function(){ picker.remove(); });
     });
   });
+  // v519: temperature — the daughter's readings are the same list as Baby → Temp (see 25b-temperature.js)
+  renderTempPanel(document.getElementById("bodyTempWrap"), {
+    person:trackPerson(), idPrefix:"body", cardClass:"bw-card", titleClass:"bw-card-title", btnClass:"bw-log-btn",
+    foldKey:"temp-", onChange: renderBodyView
+  });
+  applyBodyFolds();
 }
 

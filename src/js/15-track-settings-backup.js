@@ -569,6 +569,9 @@ function importBackupData(data) {
     var bpIdx={}; (data.workouts.bp||[]).forEach(function(e){if(e&&e.ts)bpIdx[e.ts]=e;});
     (wd.bp||[]).forEach(function(e){if(e&&e.ts)bpIdx[e.ts]=e;});
     wd.bp=Object.values(bpIdx).sort(function(a,b){return (b.ts||0)-(a.ts||0);});
+    var tpIdx={}; (data.workouts.temps||[]).forEach(function(e){if(e&&e.ts)tpIdx[trackPersonOf(e)+":"+e.ts]=e;}); // v519
+    (wd.temps||[]).forEach(function(e){if(e&&e.ts)tpIdx[trackPersonOf(e)+":"+e.ts]=e;});
+    wd.temps=Object.values(tpIdx).sort(function(a,b){return (b.ts||0)-(a.ts||0);});
     saveWD(wd);
   }
   if(data.baby&&typeof data.baby==="object"){
@@ -583,6 +586,7 @@ function importBackupData(data) {
     var _bBefore=(bd.growth||[]).length+(bd.medicine||[]).length+(bd.milestones||[]).length;
     bd.growth=mArr(bd.growth||[],(bd2.growth||[]).filter(function(g){return g&&!(growthT[g.date]!=null&&growthT[g.date]>=(g.updated||0));}),"date");
     bd.medicine=mArr(bd.medicine||[],(bd2.medicine||[]).filter(function(m){return m&&!(medT[m.id]!=null&&medT[m.id]>=medUpdatedTs(m));}),"id");
+    var tempT=getTombs("btemp"); bd.temps=mArr(bd.temps||[],(bd2.temps||[]).filter(function(m){return m&&!(tempT[m.id]!=null&&tempT[m.id]>=medUpdatedTs(m));}),"id"); // v519, same tombstone policy as medicine
     bd.milestones=mArr(bd.milestones||[],(bd2.milestones||[]).filter(function(m){return m&&!(msT[m.id]!=null&&msT[m.id]>=medUpdatedTs(m));}),"id"); bd.teeth=Object.assign({},bd2.teeth||{},bd.teeth||{});
     imported.baby=((bd.growth||[]).length+(bd.medicine||[]).length+(bd.milestones||[]).length)-_bBefore;
     bd.bottles=mergeBottles(bd.bottles||{},bd2.bottles||{});

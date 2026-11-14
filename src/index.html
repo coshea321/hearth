@@ -270,7 +270,7 @@
     </div>
     <div class="home-week-strip" id="homeWeekStrip"></div>
 
-    <div style="text-align:center;margin-top:20px;font-size:11px;color:#C8BEA8;font-weight:600;letter-spacing:.4px" id="appVersionLabel">v518 · 14/11/2026</div>
+    <div style="text-align:center;margin-top:20px;font-size:11px;color:#C8BEA8;font-weight:600;letter-spacing:.4px" id="appVersionLabel">v519 · 14/11/2026</div>
 
   </div>
 </div>
@@ -539,7 +539,7 @@
   </div>
   <div id="trainBodyView" class="train-content" style="display:none">
     <div id="tdeeCard"></div>
-    <div class="bw-card">
+    <div class="bw-card" data-fold="bwlog">
       <div class="bw-card-title">&#x2696;&#xFE0F; Log Bodyweight</div>
       <div class="bw-input-row">
         <input id="bwInput" type="number" min="30" max="300" step="0.1" class="bw-input" placeholder="e.g. 80.5">
@@ -547,13 +547,13 @@
         <button class="bw-log-btn" id="bwLogBtn">Log</button>
       </div>
     </div>
-    <div class="bw-card">
+    <div class="bw-card" data-fold="bwhist">
       <div class="bw-card-title">&#x1F4C8; Weight History</div>
       <div id="bwChart"></div>
       <div id="bwHistory"></div>
     </div>
 
-    <div class="bw-card">
+    <div class="bw-card" data-fold="bplog">
       <div class="bw-card-title">&#x2764;&#xFE0F; Log Blood Pressure</div>
       <div class="bp-input-grid">
         <div class="bp-field">
@@ -571,11 +571,13 @@
       </div>
       <button class="bw-log-btn" id="bpLogBtn">Log</button>
     </div>
-    <div class="bw-card">
+    <div class="bw-card" data-fold="bphist">
       <div class="bw-card-title">&#x1F4C8; BP History</div>
       <div id="bpChart"></div>
       <div id="bpHistory"></div>
     </div>
+    <!-- v519: filled by renderTempPanel() from renderBodyView() -->
+    <div id="bodyTempWrap"></div>
   </div>
 </div>
 
@@ -649,6 +651,7 @@
   <div class="baby-subnav">
     <button class="bsn-btn active" data-bview="growth">&#x1F4CF; Growth</button>
     <button class="bsn-btn" data-bview="medicine">&#x1F48A; Medicine</button>
+    <button class="bsn-btn" data-bview="temp">&#x1F321;&#xFE0F; Temp</button>
     <button class="bsn-btn" data-bview="milestones">&#x2B50; Milestones</button>
     <button class="bsn-btn" data-bview="teeth">&#x1F9B7; Teeth</button>
     <button class="bsn-btn" data-bview="bags">&#x1F45C; Bags</button>
@@ -699,6 +702,9 @@
       <div id="medicineHistory"></div>
     </div>
   </div>
+
+  <!-- TEMPERATURE (v519) — filled by renderBabyTemp() -->
+  <div id="babyTempView" class="baby-content" style="display:none"></div>
 
   <!-- MILESTONES -->
   <div id="babyMilestonesView" class="baby-content" style="display:none">
@@ -1173,6 +1179,7 @@
 <!--@include js/23-baby.js-->
 <!--@include js/24-medicine.js-->
 <!--@include js/25-milestones-teeth-bags.js-->
+<!--@include js/25b-temperature.js-->
 <!--@include js/26-init-test-seed.js-->
 <!--@include js/27-boot-sw.js-->
 </script>

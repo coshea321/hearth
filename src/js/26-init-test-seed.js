@@ -156,6 +156,12 @@ function buildTestSeed() {
         { id:_tsId(), text:"First proper giggle",    date:_tsDay(-17), updated:_tsTs(-17, 18, 0) },
         { id:_tsId(), text:"Sat up unaided",         date:_tsDay(-6),  updated:_tsTs(-6, 18, 0) }
       ],
+      // v519: a small fever curve so Baby → Temp shows all three colour bands
+      temps:[
+        { id:_tsId(), ts:_tsTs(0, 7, 15),  temp:37.6, method:"Ear", note:"Demo entry - after Calpol.", updated:_tsTs(0, 7, 15) },
+        { id:_tsId(), ts:_tsTs(-1, 22, 0), temp:38.4, method:"Ear", note:"", updated:_tsTs(-1, 22, 0) },
+        { id:_tsId(), ts:_tsTs(-1, 18, 30), temp:37.0, method:"Armpit", note:"", updated:_tsTs(-1, 18, 30) }
+      ],
       teeth:{},
       bottles:{ calpol:{ key:"calpol", name:"Calpol Infant", openedTs:_tsTs(-40, 10, 0), useWithinDays:90, updated:_tsTs(-40, 10, 0) } },
       bags:[]
@@ -417,6 +423,10 @@ function buildTestSeed() {
       bp:[
         { ts:_tsTs(-1, 8, 0),  date:_tsDay(-1),  sys:124, dia:78, pulse:62 },
         { ts:_tsTs(-9, 8, 15), date:_tsDay(-9),  sys:128, dia:81, pulse:66 }
+      ],
+      temps:[   // v519
+        { ts:_tsTs(-2, 9, 0), date:_tsDay(-2), temp:36.8, method:"Mouth", note:"" },
+        { ts:_tsTs(-4, 20, 0), date:_tsDay(-4), temp:37.9, method:"Ear", note:"Demo entry - head cold." }
       ]
     },
     // Pull-up Plan (v482): Week 1 Session 1 finished, Session 2 part-way.
