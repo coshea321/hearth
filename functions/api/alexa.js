@@ -77,8 +77,8 @@ export async function onRequestPost(context) {
 export function cleanPhrase(raw) {
   return String(raw || '')
     .replace(/\s+/g, ' ').trim()
-    .replace(/\s+(?:to|on|onto|in)\s+(?:the|my|our)\s+(?:hearth\s+)?(?:grocery|groceries|shopping)?\s*list$/i, '')
     .replace(/[.!?]+$/, '')
+    .replace(/\s+(?:to|on|onto|in)\s+(?:the|my|our)\s+(?:hearth\s+)?(?:grocery|groceries|shopping)?\s*list$/i, '')
     .slice(0, MAX_TEXT)
     .trim();
 }

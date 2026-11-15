@@ -144,7 +144,7 @@ module.exports = {
         listData.grocery.items.push({ id: 5, name: 'Bread', catId: 'bakery', done: true, updated: 1, added: 1 });
         listData.grocery.items.push({ id: 6, name: 'Butter', catId: 'dairy', done: false, updated: 1, added: 1 });
 
-        ok('parse: split and tidied', JSON.stringify(parseAlexaItems('some milk, eggs and a bag of apples to the shopping list'))
+        ok('parse: split and tidied', JSON.stringify(parseAlexaItems('some milk, eggs and a bag of apples to the shopping list.'))
            === JSON.stringify(['Milk','Eggs','Bag of apples']), JSON.stringify(parseAlexaItems('some milk, eggs and a bag of apples to the shopping list')));
 
         var keys = applyAlexaInbox({

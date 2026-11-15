@@ -20608,9 +20608,9 @@ function drainAlexaInbox() {
 // (commas / "and" / "then" / "plus"), after dropping the carrier words Alexa
 // can leave on either end ("some milk", "eggs to the shopping list").
 function parseAlexaItems(text) {
-  var t = String(text || "").slice(0, 300)
-    .replace(/\s+(?:to|on|onto|in)\s+(?:the|my|our)\s+(?:hearth\s+)?(?:grocery|groceries|shopping)?\s*list\s*$/i, "")
-    .replace(/[.!?]+$/, "");
+  var t = String(text || "").slice(0, 300).trim()
+    .replace(/[.!?]+$/, "")
+    .replace(/\s+(?:to|on|onto|in)\s+(?:the|my|our)\s+(?:hearth\s+)?(?:grocery|groceries|shopping)?\s*list\s*$/i, "");
   return parseVoiceItems(t).map(function(s){
     return s.replace(/^(?:some|a|an|the|more)\s+/i, "").trim();
   }).filter(Boolean).map(function(s){
