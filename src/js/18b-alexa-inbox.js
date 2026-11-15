@@ -44,9 +44,14 @@ function drainAlexaInbox() {
   if (!alexaInboxReady()) return;
   if (_inboxDraining) { _inboxAgain = true; return; }
   _inboxDraining = true;
+  // The household this read is for. If the user leaves or switches household
+  // while it is in flight, the answer belongs to the old one: drop it, or its
+  // items land in the new household and its entries are never cleared.
+  var house = hearthHouse;
   firebaseFetch(houseUrl("/inbox"))
     .then(function(r){ return (r && r.ok) ? r.json() : null; })
     .then(function(d){
+      if (hearthHouse !== house || !alexaInboxReady()) return;
       var keys = applyAlexaInbox(d);
       keys.forEach(function(k){
         firebaseFetch(houseUrl("/inbox/" + encodeURIComponent(k)), { method:"DELETE" }).catch(function(){});
@@ -108,11 +113,13 @@ function applyAlexaInbox(d) {
 // back to the list, otherwise a new item in its detected category.
 function alexaAddGrocery(name, id, tombs) {
   var lt = "grocery", items = listData[lt].items, low = name.toLowerCase();
+  function sameName(it){ return it && typeof it.name === "string" && it.name.toLowerCase() === low; }
+  function idTaken(n){ return items.some(function(it){ return it && it.id === n; }); }
+  // Another device already added this exact item (same id, same name).
+  if (items.some(function(it){ return it && it.id === id && sameName(it); })) return "exists";
   for (var i = 0; i < items.length; i++) {
     var it = items[i];
-    if (!it || typeof it.name !== "string") continue;
-    if (it.id === id) return "exists";               // another device got here first
-    if (it.name.toLowerCase() !== low) continue;
+    if (!sameName(it)) continue;
     if (!it.done) return "exists";
     it.done = false; clearPersonChecks(it);
     it.updated = Date.now(); it.added = Date.now();
@@ -121,6 +128,11 @@ function alexaAddGrocery(name, id, tombs) {
     return "restored";
   }
   if (tombs && tombs[id] != null) return "deleted";   // already added and deleted elsewhere
+  // Server timestamps are not unique: a second entry a few ms later can land
+  // on an id another Alexa item already holds. Take the next free id rather
+  // than skip the item — the worst case is then a duplicate, never a loss
+  // (PR #300 review).
+  while (idTaken(id) || (tombs && tombs[id] != null)) id++;
   var catId = detectCatFor(lt, name);
   items.unshift({ id:id, name:name, catId:catId, done:false, dueDate:null, addedBy:"alexa", updated:id, added:id });
   addToHistFor(lt, name, catId);

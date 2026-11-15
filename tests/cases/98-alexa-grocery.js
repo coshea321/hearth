@@ -171,6 +171,11 @@ module.exports = {
         applyAlexaInbox({ '-a': { text: 'milk and eggs', ts: 1000 } });
         ok('apply: the same entry twice adds nothing', listData.grocery.items.length === n);
 
+        // Two entries close together whose ids overlap: neither item is lost.
+        applyAlexaInbox({ '-f': { text: 'rice and pasta', ts: 7000 }, '-g': { text: 'flour', ts: 7001 } });
+        ok('apply: overlapping timestamps lose no item', byNameNow('Rice').length === 1 && byNameNow('Pasta').length === 1 &&
+           byNameNow('Flour').length === 1, JSON.stringify(listData.grocery.items.map(function(i){ return i.id + ':' + i.name; })));
+
         // Deleted elsewhere before this device drained it → stays deleted.
         storeSet('fl4_tomb_grocery', { 3000: Date.now() });
         applyAlexaInbox({ '-d': { text: 'cheese', ts: 3000 } });
@@ -192,6 +197,32 @@ module.exports = {
       finally { storeSet = realStoreSet; }
       return { pass: pass, fail: fail };
     })()`);
-    return { pass: pass.concat(r.pass), fail: fail.concat(r.fail) };
+    // An inbox read that answers after the household changed is dropped:
+    // nothing added, nothing deleted.
+    const r2 = await page.evaluate(`(async function(){
+      var pass = [], fail = [];
+      function ok(name, cond, detail){ if (cond) pass.push(name); else fail.push({name:name, detail:detail || 'assertion failed'}); }
+      var realReady = alexaInboxReady, realFetch = firebaseFetch, realHouse = hearthHouse, calls = [];
+      try {
+        listData.grocery = { items: [], hist: [] };
+        alexaInboxReady = function(){ return true; };
+        hearthHouse = 'houseA';
+        var release;
+        var gate = new Promise(function(res){ release = res; });
+        firebaseFetch = function(url, o){
+          calls.push((o && o.method || 'GET') + ' ' + url);
+          return gate.then(function(){ return { ok: true, json: function(){ return { '-x': { text: 'cheese', ts: 9000 } }; } }; });
+        };
+        drainAlexaInbox();
+        hearthHouse = 'houseB';             // left / switched while the read was in flight
+        release();
+        await new Promise(function(res){ setTimeout(res, 50); });
+        ok('switch: items from the old household are not added', listData.grocery.items.length === 0, JSON.stringify(listData.grocery.items));
+        ok('switch: nothing is deleted', calls.filter(function(c){ return /^DELETE/.test(c); }).length === 0, calls.join(' | '));
+      } catch (e) { fail.push({ name: 'threw', detail: String(e && e.stack || e) }); }
+      finally { alexaInboxReady = realReady; firebaseFetch = realFetch; hearthHouse = realHouse; }
+      return { pass: pass, fail: fail };
+    })()`);
+    return { pass: pass.concat(r.pass, r2.pass), fail: fail.concat(r.fail, r2.fail) };
   }
 };
