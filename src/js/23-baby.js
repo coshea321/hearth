@@ -41,6 +41,7 @@ function applyHousehold(data) {
   var _rDirty = {}; // v375: render targets touched by this apply cycle (see flushSyncRenders)
   // Declared outside the try so the partner-added toast below is still safe if a merge throws.
   var _newFromOther = {}; // lt → count of new items added by the other user
+  var _newFromAlexa = 0;  // v527: of those, how many came in by Alexa (toast says "Alexa", not the partner)
   try {
   var _listRepush = false; // true if our merge is fuller/newer than /shared → re-push to converge
   ["grocery","todo","travel","personal"].forEach(function(lt) {
@@ -57,6 +58,7 @@ function applyHousehold(data) {
       if (it && it.addedBy && it.addedBy !== hearthUser && !it.done &&
           !existingIds[it.id] && !seen[it.id]) {
         _newFromOther[lt] = (_newFromOther[lt]||0) + 1;
+        if (it.addedBy === "alexa") _newFromAlexa++;
         markUnseen(lt, it.id);
       }
     });
@@ -261,7 +263,7 @@ function applyHousehold(data) {
   Object.keys(_newFromOther).forEach(function(lt){ _totalNew += _newFromOther[lt]; if(!_firstLt) _firstLt = lt; });
   if (_totalNew > 0) {
     var ltName = _firstLt ? (LIST_TYPES[_firstLt] ? LIST_TYPES[_firstLt].name.replace(/&#x[0-9A-Fa-f]+;\s*/,"") : _firstLt) : "";
-    var partner = hearthUser === "cathal1" ? "Petra" : "Cathal";
+    var partner = _newFromAlexa === _totalNew ? "Alexa" : (hearthUser === "cathal1" ? "Petra" : "Cathal");
     toast("&#x1F465; " + partner + " added " + _totalNew + " item" + (_totalNew!==1?"s":"") + (_firstLt && _totalNew===_newFromOther[_firstLt] ? " to " + ltName : ""));
   }
 }

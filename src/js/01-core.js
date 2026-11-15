@@ -658,10 +658,13 @@ function getCats()  { return getAllCats(currentList); }
 // ============================================================
 // DETECTION
 // ============================================================
-function detectCat(name) {
-  if (!name) return "other";
+function detectCat(name) { return detectCatFor(currentList, name); }
+// v527: the same keyword match for a named list, so code that adds to a list
+// other than the open one (the Alexa inbox) categorises exactly like a manual add.
+function detectCatFor(lt, name) {
+  if (!name || !LIST_CONFIG[lt]) return "other";
   var low = name.toLowerCase();
-  var kw = LIST_CONFIG[currentList].kw;
+  var kw = LIST_CONFIG[lt].kw;
   for (var i = 0; i < kw.length; i++) {
     if (low.indexOf(kw[i][0]) !== -1) return kw[i][1];
   }
