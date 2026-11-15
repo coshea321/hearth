@@ -1059,7 +1059,10 @@ function buildSuggestionsStrip(){
       "<span class='sugg-x' data-name='"+nm+"' aria-label='Dismiss "+nm+"' style='display:inline-flex;align-items:center;padding:13px 14px;border-left:1px solid #E4DCC8;color:#B0705E;font-weight:700;font-size:16px;line-height:1;cursor:pointer;touch-action:manipulation'>&times;</span>" +
     "</span>";
   }).join("");
-  return "<div style='padding:2px 2px 4px'><div style='font-size:11px;font-weight:700;color:#9A8A6A;text-transform:uppercase;letter-spacing:.5px;margin:2px 2px 7px'>&#x1F52E; Suggested</div>" + chips + "</div>";
+  // Clear all (v-next): snoozes every currently-eligible suggestion (not just
+  // the 4 shown) with the same 14-day snooze the single × uses.
+  return "<div style='padding:2px 2px 4px'><div style='display:flex;align-items:center;justify-content:space-between;margin:2px 2px 7px'><span style='font-size:11px;font-weight:700;color:#9A8A6A;text-transform:uppercase;letter-spacing:.5px'>&#x1F52E; Suggested</span>" +
+    "<span class='sugg-clear' role='button' aria-label='Dismiss all suggestions' style='font-size:12px;font-weight:700;color:#B0705E;padding:8px 6px;cursor:pointer;touch-action:manipulation'>Clear all</span></div>" + chips + "</div>";
 }
 // Wire the suggestion chips after renderList sets innerHTML (called from both
 // the empty-list and populated paths, so suggestions work on an empty list too).
@@ -1074,6 +1077,14 @@ function wireSuggestionChips(){
   });
   elListC.querySelectorAll(".sugg-x").forEach(function(el){
     el.addEventListener("click", function(){ if (el.dataset.name){ suggSnooze(el.dataset.name); renderList(); } });
+  });
+  elListC.querySelectorAll(".sugg-clear").forEach(function(el){
+    el.addEventListener("click", function(){
+      var all = buildGrocerySuggestions(999);
+      all.forEach(function(s){ suggSnooze(s.name); });
+      renderList();
+      toast("Dismissed " + all.length + " suggestion" + (all.length===1?"":"s") + " for 2 weeks");
+    });
   });
 }
 
