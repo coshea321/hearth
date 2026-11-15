@@ -241,15 +241,40 @@ var HCAL_MAX_AGE = 15 * 60 * 1000;
 var HCAL_MAX_ROWS = 10;
 var _hcalFetching = false;
 
-function hcalYmd(d) {
-  return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
+// Today / tomorrow / the clock IN IRISH TIME. /api/calendar returns every
+// event in Europe/Dublin, so comparing against the phone's own clock would
+// show finished events (or hide upcoming ones) while travelling (Codex on
+// #294). Falls back to the device clock if the browser lacks the zone.
+function hcalNow() {
+  var d = new Date(), y, mo, da, h, mi;
+  try {
+    var p = {};
+    new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Dublin", hourCycle: "h23",
+      year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+      .formatToParts(d).forEach(function(x){ p[x.type] = x.value; });
+    y = +p.year; mo = +p.month; da = +p.day; h = +p.hour % 24; mi = +p.minute;
+  } catch (e) {
+    y = d.getFullYear(); mo = d.getMonth() + 1; da = d.getDate(); h = d.getHours(); mi = d.getMinutes();
+  }
+  var base = Date.UTC(y, mo - 1, da);
+  return { today: hcalUtcYmd(base), tomorrow: hcalUtcYmd(base + 86400000),
+           hm: ("0" + h).slice(-2) + ":" + ("0" + mi).slice(-2),
+           plus: function(n){ return hcalUtcYmd(base + n * 86400000); } };
+}
+function hcalUtcYmd(t) {
+  var x = new Date(t);
+  return x.getUTCFullYear() + "-" + ("0" + (x.getUTCMonth() + 1)).slice(-2) + "-" + ("0" + x.getUTCDate()).slice(-2);
+}
+function hcalNextDay(ds) {
+  var p = String(ds).split("-");
+  return hcalUtcYmd(Date.UTC(+p[0], +p[1] - 1, +p[2]) + 86400000);
 }
 function hcalLoadCache() {
   try { return JSON.parse(localStorage.getItem(HCAL_CACHE_KEY) || "null"); }
   catch (e) { return null; }
 }
 function hcalDemo() {
-  function day(n) { var d = new Date(); d.setDate(d.getDate() + n); return hcalYmd(d); }
+  var day = hcalNow().plus;
   return { at: Date.now(), events: [
     { date: day(0), allDay: false, start: "09:00", end: "09:30", title: "Demo crèche drop-off", location: "" },
     { date: day(0), allDay: false, start: "23:00", end: "23:30", title: "Demo late reminder", location: "" },
@@ -280,11 +305,8 @@ function hcalPaint(rec, stale) {
     card.classList.add("hcal-show");
     return;
   }
-  var now = new Date();
-  var todayStr = hcalYmd(now);
-  var tm = new Date(now); tm.setDate(tm.getDate() + 1);
-  var tomorrowStr = hcalYmd(tm);
-  var nowHM = ("0" + now.getHours()).slice(-2) + ":" + ("0" + now.getMinutes()).slice(-2);
+  var nowIE = hcalNow();
+  var todayStr = nowIE.today, tomorrowStr = nowIE.tomorrow, nowHM = nowIE.hm;
   var evs = (rec.events || []).filter(function(e){
     if (!e || !e.date || e.date < todayStr) return false;
     // Drop today's timed events that have already finished.
@@ -305,7 +327,9 @@ function hcalPaint(rec, stale) {
       html += "<div class='hcal-day'>" + hcalDayLabel(e.date, todayStr, tomorrowStr) + "</div>";
       lastDay = e.date;
     }
-    var when = e.allDay ? "All day" : e.cont ? "Ongoing" : esc(e.start || "") + (e.end && (e.endDate || e.date) === e.date ? "–" + esc(e.end) : "");
+    // Show the end time when it is the same day, or exactly midnight after.
+    var endSame = e.end && ((e.endDate || e.date) === e.date || (e.end === "00:00" && e.endDate === hcalNextDay(e.date)));
+    var when = e.allDay ? "All day" : e.cont ? "Ongoing" : esc(e.start || "") + (endSame ? "–" + esc(e.end) : "");
     html += "<div class='hcal-ev'><span class='hcal-time'>" + when + "</span><span class='hcal-what'>" +
       esc(e.title || "(no title)") + (e.location ? "<span class='hcal-loc'>" + esc(e.location) + "</span>" : "") + "</span></div>";
     shown++;

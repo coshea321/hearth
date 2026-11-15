@@ -147,7 +147,7 @@ function parseVevents(text) {
 }
 
 // A DTSTART-style property → { wall, allDay, tz } where wall is in tz.
-// UTC values ("Z") are converted into the household zone.
+// UTC values ("Z") come back as tz 'UTC'; toHome() converts per occurrence.
 function parseWhen(prop, homeTz, rawValue) {
   const v = String(rawValue != null ? rawValue : prop.value).trim();
   let m = /^(\d{4})(\d{2})(\d{2})$/.exec(v);
@@ -157,7 +157,10 @@ function parseWhen(prop, homeTz, rawValue) {
   m = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})?(Z)?$/.exec(v);
   if (!m) return null;
   const wall = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0));
-  if (m[7]) return { wall: wallInZone(homeTz, wall), allDay: false, tz: homeTz };
+  // UTC stays UTC: a recurring series must repeat in its OWN zone and only be
+  // converted per occurrence, or a 09:00Z weekly slot drifts to 10:00 Irish
+  // time after the clocks change (Codex on #294).
+  if (m[7]) return { wall: wall, allDay: false, tz: 'UTC' };
   const tzid = prop.params && prop.params.TZID;
   if (tzid && tzid !== homeTz && validZone(tzid)) return { wall: wall, allDay: false, tz: tzid };
   return { wall: wall, allDay: false, tz: homeTz }; // floating or home zone
@@ -212,7 +215,8 @@ function expandStarts(start, rr, limitWall) {
   let until = null;
   if (rr.UNTIL) {
     const u = parseWhen({ params: {} }, start.tz, rr.UNTIL);
-    if (u) until = u.allDay ? u.wall + DAY_MS - 1 : u.wall;
+    if (u) until = u.allDay ? u.wall + DAY_MS - 1
+                 : (u.tz === start.tz ? u.wall : wallInZone(start.tz, wallToUtc(u.tz, u.wall)));
   }
   const unsupported = rr.BYSETPOS || rr.BYWEEKNO || rr.BYYEARDAY || rr.BYHOUR || rr.BYMINUTE;
   if (unsupported || ['DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY'].indexOf(freq) === -1) return [start.wall];
@@ -247,11 +251,14 @@ function expandStarts(start, rr, limitWall) {
   } else if (freq === 'WEEKLY') {
     const days = byday.length ? byday.map(b => b.wd).sort((a, b) => a - b) : [t0.getUTCDay()];
     // Week containing DTSTART, starting Monday (WKST default).
+    // Weeks start on WKST (default Monday). With INTERVAL > 1 it decides
+    // which weeks count, so it must not be hard-coded (Codex on #294).
+    const wkst = (rr.WKST && (rr.WKST.toUpperCase() in WD)) ? WD[rr.WKST.toUpperCase()] : 1;
     const weekStart = Date.UTC(t0.getUTCFullYear(), t0.getUTCMonth(), t0.getUTCDate()) -
-                      ((t0.getUTCDay() + 6) % 7) * DAY_MS;
+                      ((t0.getUTCDay() - wkst + 7) % 7) * DAY_MS;
     let stop = false;
     for (let wk = weekStart; !stop && guard++ < 10000; wk += interval * 7 * DAY_MS) {
-      const order = days.map(wd => (wd + 6) % 7).sort((a, b) => a - b);
+      const order = days.map(wd => (wd - wkst + 7) % 7).sort((a, b) => a - b);
       for (const off of order) {
         const w = wk + off * DAY_MS + timeOfDay;
         if (w < start.wall) continue;
@@ -373,7 +380,10 @@ export function eventsInWindow(text, from, days, homeTz) {
       const cont = s < winStart; // began before today, still running
       out.push({ date: cont ? ymd(winStart) : ymd(s), allDay: false,
                  start: cont ? '' : hm(s), end: dur ? hm(e) : '',
-                 endDate: dur ? ymd(e - 1) : ymd(s), cont: cont,
+                 // The real end date: an event ending at 00:00 ends on the
+                 // NEXT day, so the card must not treat "00:00" as already
+                 // past on the start day (Codex on #294).
+                 endDate: ymd(e), cont: cont,
                  title: title, location: location });
     });
   });

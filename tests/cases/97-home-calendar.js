@@ -92,6 +92,33 @@ module.exports = {
     ok('fn: timed event that began yesterday shows as ongoing today',
       ev3.length === 1 && ev3[0].date === '2026-10-15' && ev3[0].cont === true && ev3[0].end === '10:00', JSON.stringify(ev3));
 
+    // Codex on #294 — four review findings, each pinned.
+    function one(body, from) {
+      return fn.eventsInWindow('BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:q\r\n' + body.join('\r\n') +
+        '\r\nSUMMARY:T\r\nEND:VEVENT\r\nEND:VCALENDAR', from, 8, 'Europe/Dublin');
+    }
+    const mid = one(['DTSTART;TZID=Europe/Dublin:20261115T230000', 'DTEND;TZID=Europe/Dublin:20261116T000000'], '2026-11-15');
+    ok('fn: an event ending at midnight carries the NEXT day as its end date',
+      mid.length === 1 && mid[0].date === '2026-11-15' && mid[0].end === '00:00' && mid[0].endDate === '2026-11-16', JSON.stringify(mid));
+    const utcSeries = one(['DTSTART:20261020T090000Z', 'DTEND:20261020T093000Z', 'RRULE:FREQ=WEEKLY'], '2026-11-15');
+    ok('fn: a UTC weekly series keeps its UTC time after the clocks change (09:00Z = 09:00 Irish in winter)',
+      utcSeries.length === 1 && utcSeries[0].date === '2026-11-17' && utcSeries[0].start === '09:00', JSON.stringify(utcSeries));
+    const utcSummer = one(['DTSTART:20260601T090000Z', 'RRULE:FREQ=WEEKLY;COUNT=2'], '2026-06-01');
+    ok('fn: a UTC time shows in Irish summer time (09:00Z = 10:00)',
+      utcSummer.length === 2 && utcSummer[0].start === '10:00' && utcSummer[1].date === '2026-06-08', JSON.stringify(utcSummer));
+    const wk = one(['DTSTART;TZID=Europe/Dublin:20261109T090000', 'RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,SU;WKST=SU'], '2026-11-15')
+      .map(e => e.date);
+    ok('fn: WKST decides which fortnight weeks count (22 and 23 Nov, not 15)',
+      JSON.stringify(wk) === JSON.stringify(['2026-11-22']), JSON.stringify(wk));
+    const wk2 = one(['DTSTART;TZID=Europe/Dublin:20261109T090000', 'RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,SU;WKST=SU'], '2026-11-16')
+      .map(e => e.date);
+    ok('fn: … and the Monday after (23 Nov) too',
+      JSON.stringify(wk2) === JSON.stringify(['2026-11-22', '2026-11-23']), JSON.stringify(wk2));
+    const wkMo = one(['DTSTART;TZID=Europe/Dublin:20261109T090000', 'RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,SU'], '2026-11-09')
+      .map(e => e.date);
+    ok('fn: default Monday week start unchanged (9 & 15 Nov)',
+      JSON.stringify(wkMo) === JSON.stringify(['2026-11-09', '2026-11-15']), JSON.stringify(wkMo));
+
     const r503 = await fn.onRequestGet({ env: {} });
     const b503 = await r503.json();
     ok('fn: no secret configured → 503 not_configured', r503.status === 503 && b503.error === 'not_configured', r503.status + ' ' + JSON.stringify(b503));
@@ -131,22 +158,27 @@ module.exports = {
         ok('card: Today and Tomorrow headings', /Today/.test(card.textContent) && /Tomorrow/.test(card.textContent), card.textContent.slice(0, 200));
         ok('card: all-day row labelled', /All day/.test(card.textContent), card.textContent.slice(0, 200));
 
-        var today = hcalYmd(new Date());
-        var y = new Date(); y.setDate(y.getDate() - 1);
+        var nIE = hcalNow(), today = nIE.today;
         hcalPaint({ at: Date.now(), events: [
-          { date: hcalYmd(y), allDay:false, start:'10:00', end:'11:00', title:'Yesterday thing' },
+          { date: nIE.plus(-1), allDay:false, start:'10:00', end:'11:00', title:'Yesterday thing' },
+          { date: today, allDay:false, start:'00:00', end:'00:00', endDate: nIE.tomorrow, title:'Runs to midnight' },
           { date: today, allDay:false, start:'00:00', end:'00:00', title:'Already over' },
           { date: today, allDay:false, start:'23:58', end:'23:59', title:'<img src=x onerror=alert(1)>' }
         ] }, false);
         ok('card: past-day event dropped', !/Yesterday thing/.test(card.textContent), card.textContent);
         ok('card: finished event today dropped', !/Already over/.test(card.textContent), card.textContent);
+        ok('card: an event ending at midnight stays up all day', /Runs to midnight/.test(card.textContent) && /00:00–00:00/.test(card.textContent), card.textContent);
+
+        // Irish time, not the phone's: matches Intl's Dublin clock.
+        var fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Dublin', year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date());
+        ok('card: "today" is the Irish date', nIE.today === fmt, nIE.today + ' vs ' + fmt);
         ok('card: title escaped, not rendered as HTML', !card.querySelector('img') && /<img/.test(card.textContent), card.innerHTML.slice(0, 300));
 
         hcalPaint({ at: Date.now(), events: [] }, false);
         ok('card: empty week says nothing on today', /Nothing on today/.test(card.textContent), card.textContent);
 
         var many = [];
-        for (var i = 0; i < 14; i++) { var d = new Date(); d.setDate(d.getDate() + 1); many.push({ date: hcalYmd(d), allDay:true, start:'', end:'', title:'Item ' + i }); }
+        for (var i = 0; i < 14; i++) { many.push({ date: nIE.tomorrow, allDay:true, start:'', end:'', title:'Item ' + i }); }
         hcalPaint({ at: Date.now(), events: many }, false);
         ok('card: capped at 10 rows', card.querySelectorAll('.hcal-ev').length === 10, String(card.querySelectorAll('.hcal-ev').length));
         ok('card: says how many more', /\\+4 more this week/.test(card.textContent), card.textContent.slice(-80));
