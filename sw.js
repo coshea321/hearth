@@ -1,5 +1,5 @@
 // ── Single source of truth — bump this and everything updates ──
-const VERSION = 'v520 · 14/11/2026';
+const VERSION = 'v521 · 15/11/2026';
 const CACHE   = 'hearth-' + VERSION;
 
 const ASSETS = [
@@ -75,6 +75,12 @@ self.addEventListener('fetch', e => {
   // instead of Cloudflare's response: the login round-trip never completes
   // and the Access cookie is never set. Let them go straight to the network.
   if (url.pathname.startsWith('/cdn-cgi/')) return;
+  // /api/ is live data from Cloudflare Pages Functions (v521: the Home
+  // calendar card's /api/calendar). Never cache it: the cache-first branch
+  // below would otherwise keep the first response forever and the card would
+  // show the same week's events indefinitely. The page keeps its own
+  // last-good copy for offline, so the worker has nothing to add here.
+  if (url.pathname.startsWith('/api/')) return;
 
   const isShell = e.request.mode === 'navigate' ||
                   url.pathname.endsWith('/') || url.pathname.endsWith('/index.html');

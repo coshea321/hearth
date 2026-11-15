@@ -158,6 +158,11 @@
       <div class="hw-meta" id="hwMeta"></div>
     </div>
 
+    <!-- Calendar card (v521) — one Google Calendar, today + next 7 days, read-only.
+         Filled by renderHomeCalendar() from /api/calendar (a Cloudflare Pages
+         Function); hidden until it has something to show. -->
+    <div class="home-cal" id="homeCalendar"></div>
+
     <!-- Today summary card (v302) — self-suppressing one-line-per-domain glance -->
     <div id="homeTodayCard"></div>
 
@@ -270,7 +275,7 @@
     </div>
     <div class="home-week-strip" id="homeWeekStrip"></div>
 
-    <div style="text-align:center;margin-top:20px;font-size:11px;color:#C8BEA8;font-weight:600;letter-spacing:.4px" id="appVersionLabel">v520 · 14/11/2026</div>
+    <div style="text-align:center;margin-top:20px;font-size:11px;color:#C8BEA8;font-weight:600;letter-spacing:.4px" id="appVersionLabel">v521 · 15/11/2026</div>
 
   </div>
 </div>

@@ -224,6 +224,128 @@ function fetchWeather(force) {
   });
 }
 
+// ── Calendar card (v521) ─────────────────────────────────────
+// One Google Calendar, today + the next 7 days, read-only. The events come
+// from /api/calendar — a Cloudflare Pages Function (functions/api/calendar.js)
+// that holds the calendar's secret iCal address in an encrypted Pages
+// variable and sits behind the same Access gate as the app. Same shape as the
+// weather card: device-local cache, never synced through Firebase, refetched
+// when older than 15 min (the Home clock tick keeps a kiosk phone current),
+// last-good copy shown faded when offline, card hidden when there is nothing
+// to show. The service worker never caches /api/ (sw.js), so freshness is
+// this cache's job alone. Test builds and previews never call the network:
+// they paint a fixed demo week instead (hcalDemo), which the tests read too.
+// Names are hcal*, NOT cal*: cal*/renderCal* are the recipe batch-cook helper.
+var HCAL_CACHE_KEY = "hearthCalendar";
+var HCAL_MAX_AGE = 15 * 60 * 1000;
+var HCAL_MAX_ROWS = 10;
+var _hcalFetching = false;
+
+function hcalYmd(d) {
+  return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
+}
+function hcalLoadCache() {
+  try { return JSON.parse(localStorage.getItem(HCAL_CACHE_KEY) || "null"); }
+  catch (e) { return null; }
+}
+function hcalDemo() {
+  function day(n) { var d = new Date(); d.setDate(d.getDate() + n); return hcalYmd(d); }
+  return { at: Date.now(), events: [
+    { date: day(0), allDay: false, start: "09:00", end: "09:30", title: "Demo crèche drop-off", location: "" },
+    { date: day(0), allDay: false, start: "23:00", end: "23:30", title: "Demo late reminder", location: "" },
+    { date: day(1), allDay: true,  start: "", end: "", title: "Demo bin day", location: "" },
+    { date: day(1), allDay: false, start: "18:30", end: "19:30", title: "Demo swim lesson", location: "Leisure centre" },
+    { date: day(4), allDay: false, start: "11:00", end: "12:00", title: "Demo GP visit", location: "Main Street" }
+  ] };
+}
+function hcalDayLabel(ds, todayStr, tomorrowStr) {
+  if (ds === todayStr) return "Today";
+  if (ds === tomorrowStr) return "Tomorrow";
+  var p = ds.split("-"), d = new Date(+p[0], +p[1] - 1, +p[2]);
+  return ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()] + " " + d.getDate();
+}
+function hcalPaint(rec, stale) {
+  var card = document.getElementById("homeCalendar");
+  if (!card) return;
+  if (!rec) { card.classList.remove("hcal-show"); card.innerHTML = ""; return; }
+  var head = "<div class='hcal-head'><span class='hcal-title'>&#x1F4C5; Calendar</span>";
+  if (stale && rec.at) {
+    var t = new Date(rec.at);
+    head += "<span class='hcal-stamp'>as of " + ("0" + t.getHours()).slice(-2) + ":" + ("0" + t.getMinutes()).slice(-2) + "</span>";
+  }
+  head += "</div>";
+  if (rec.notConfigured) {
+    card.innerHTML = head + "<div class='hcal-none'>Calendar isn't connected yet.</div>";
+    card.classList.toggle("hcal-stale", !!stale);
+    card.classList.add("hcal-show");
+    return;
+  }
+  var now = new Date();
+  var todayStr = hcalYmd(now);
+  var tm = new Date(now); tm.setDate(tm.getDate() + 1);
+  var tomorrowStr = hcalYmd(tm);
+  var nowHM = ("0" + now.getHours()).slice(-2) + ":" + ("0" + now.getMinutes()).slice(-2);
+  var evs = (rec.events || []).filter(function(e){
+    if (!e || !e.date || e.date < todayStr) return false;
+    // Drop today's timed events that have already finished.
+    if (e.date === todayStr && !e.allDay) {
+      var last = (e.end && (e.endDate || e.date) === todayStr) ? e.end : (e.end ? "" : e.start);
+      if (last && last <= nowHM) return false;
+    }
+    return true;
+  });
+  var html = head, shown = 0, lastDay = null;
+  if (!evs.length || evs[0].date !== todayStr) {
+    html += "<div class='hcal-day'>Today</div><div class='hcal-none'>Nothing on today</div>";
+    lastDay = todayStr;
+  }
+  for (var i = 0; i < evs.length && shown < HCAL_MAX_ROWS; i++) {
+    var e = evs[i];
+    if (e.date !== lastDay) {
+      html += "<div class='hcal-day'>" + hcalDayLabel(e.date, todayStr, tomorrowStr) + "</div>";
+      lastDay = e.date;
+    }
+    var when = e.allDay ? "All day" : e.cont ? "Ongoing" : esc(e.start || "") + (e.end && (e.endDate || e.date) === e.date ? "–" + esc(e.end) : "");
+    html += "<div class='hcal-ev'><span class='hcal-time'>" + when + "</span><span class='hcal-what'>" +
+      esc(e.title || "(no title)") + (e.location ? "<span class='hcal-loc'>" + esc(e.location) + "</span>" : "") + "</span></div>";
+    shown++;
+  }
+  if (evs.length > shown) html += "<div class='hcal-more'>+" + (evs.length - shown) + " more this week</div>";
+  card.innerHTML = html;
+  card.classList.toggle("hcal-stale", !!stale);
+  card.classList.add("hcal-show");
+}
+function renderHomeCalendar(force) {
+  // Test builds and previews (file://, localhost) have no /api/ to call.
+  if (_isTestBuild || _isPreview) { hcalPaint(hcalDemo(), false); return; }
+  var cached = hcalLoadCache();
+  var age = cached ? Date.now() - (cached.at || 0) : Infinity;
+  hcalPaint(cached, age > HCAL_MAX_AGE);
+  if (!force && age <= HCAL_MAX_AGE) return;
+  if (_hcalFetching || !navigator.onLine) return;
+  _hcalFetching = true;
+  // credentials so the Cloudflare Access cookie goes with it; no-store so
+  // neither the HTTP cache nor anything in between answers instead.
+  fetch("/api/calendar", { credentials: "same-origin", cache: "no-store" }).then(function(r){
+    return r.json().then(function(j){ return { status: r.status, body: j }; });
+  }).then(function(res){
+    _hcalFetching = false;
+    var rec = null;
+    if (res.status === 200 && res.body && res.body.ok && Array.isArray(res.body.events)) {
+      rec = { at: Date.now(), events: res.body.events };
+    } else if (res.status === 503 && res.body && res.body.error === "not_configured") {
+      rec = { at: Date.now(), events: [], notConfigured: true };
+    }
+    if (!rec) return; // upstream/parse error: keep whatever is painted
+    try { localStorage.setItem(HCAL_CACHE_KEY, JSON.stringify(rec)); } catch (e) {}
+    if (currentSection === "home") hcalPaint(rec, false);
+  }).catch(function(){
+    // Offline, an expired Access session (the login redirect is cross-origin
+    // so fetch rejects), or no /api/ at all: keep the last good copy, faded.
+    _hcalFetching = false;
+  });
+}
+
 // ── Weather detail sheet (hourly + next 3 days) ──────────────
 function hwDayName(dateStr, idx) {
   if (idx === 0) return "Today";
@@ -604,6 +726,11 @@ function renderTodayCard() {
 // in v488 (the phone's status bar already shows the time).
 var _homeClockTimer = null;
 function updateHomeClock() {
+  // v521: the same 15s tick keeps the calendar card current on a phone that
+  // sits on Home all day (kitchen dashboard) — it repaints from cache (so
+  // finished events drop off and midnight rolls the days over) and refetches
+  // only once the cache is 15 min old.
+  try { renderHomeCalendar(); } catch(e){}
   var elIE = document.getElementById("homeClockIE");
   if (!elIE) return;
   var now = new Date();
@@ -665,6 +792,7 @@ function renderHomeScreen() {
   var hc2 = document.querySelector(".home-content");
   if (hc2) hc2.style.opacity = "1";
   fetchWeather();
+  try { renderHomeCalendar(); } catch(e){ console.error("calendar card: "+e.message); }
   // Show placeholder while data loads
   var tcTrain = document.getElementById("tcTrainCount");
   if (tcTrain && tcTrain.textContent === "—") tcTrain.style.opacity = "0.4";
