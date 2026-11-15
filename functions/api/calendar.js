@@ -29,22 +29,54 @@ export async function onRequestGet(context) {
   if (!/^https:\/\//.test(src)) {
     return json({ error: 'not_configured' }, 503);
   }
-  let text;
+  let text, feed;
   try {
     const r = await fetch(src, { headers: { 'User-Agent': 'Hearth calendar' } });
-    if (!r.ok) return json({ error: 'upstream', status: r.status }, 502);
+    // v523: what Google actually sent, for the /api/calendar page. Never the
+    // address itself — only the host it ended up on, status, type and size.
+    feed = { status: r.status, host: hostOf(r.url || src), redirected: !!r.redirected,
+             type: (r.headers.get('Content-Type') || '').split(';')[0] };
+    if (!r.ok) return json({ error: 'upstream', feed: feed }, 502);
     text = await r.text();
   } catch (e) {
     return json({ error: 'upstream' }, 502);
   }
+  feed.bytes = text.length;
+  if (!/^\s*BEGIN:VCALENDAR/i.test(text)) {
+    // Not a calendar at all — e.g. a Google sign-in or error page when the
+    // address is not the "Secret address in iCal format". Report the page
+    // title so the cause is visible, and keep the card's last good copy.
+    const t = /<title[^>]*>([^<]{0,120})/i.exec(text);
+    feed.pageTitle = t ? t[1].trim() : '';
+    return json({ error: 'not_ical', feed: feed }, 502);
+  }
   try {
+    feed.summary = feedSummary(text);
     const from = todayIn(TZ, Date.now());
     const events = eventsInWindow(text, from, DAYS, TZ);
-    return json({ ok: true, tz: TZ, from: from, days: DAYS, events: events,
+    return json({ ok: true, tz: TZ, from: from, days: DAYS, events: events, feed: feed,
                   generatedAt: new Date().toISOString() }, 200);
   } catch (e) {
-    return json({ error: 'parse' }, 500);
+    return json({ error: 'parse', feed: feed }, 500);
   }
+}
+
+function hostOf(u) {
+  try { return new URL(u).hostname; } catch (e) { return ''; }
+}
+
+// v523 diagnostics: which calendar this is and what it holds overall, so an
+// empty card can be told apart from an empty or wrong feed. Exported for tests.
+export function feedSummary(text) {
+  const vevents = parseVevents(text);
+  const head = /^X-WR-CALNAME:(.*)$/m.exec(unfold(text));
+  let newest = '';
+  vevents.forEach(ev => {
+    const m = ev.DTSTART && /^(\d{4})(\d{2})(\d{2})/.exec(ev.DTSTART.value);
+    if (m) { const d = m[1] + '-' + m[2] + '-' + m[3]; if (d > newest) newest = d; }
+  });
+  return { calendar: head ? unescapeText(head[1]).trim() : '', events: vevents.length,
+           recurring: vevents.filter(ev => ev.RRULE).length, newestStart: newest };
 }
 
 function json(obj, status) {
