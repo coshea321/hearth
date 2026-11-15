@@ -133,6 +133,16 @@ module.exports = {
       ok('fn: fetches the configured address', asked.indexOf('https://calendar.google.com/') === 0, asked);
       ok('fn: 200 with ok + events + 8 days', r200.status === 200 && b200.ok === true && Array.isArray(b200.events) && b200.days === 8, JSON.stringify(b200).slice(0, 200));
       ok('fn: the secret address is never echoed back', JSON.stringify(b200).indexOf('private-y') === -1, 'leaked');
+      ok('fn: v523 reports what the feed holds overall',
+        b200.feed && b200.feed.summary && b200.feed.summary.events >= 10 && b200.feed.status === 200 &&
+        b200.feed.host === 'calendar.google.com', JSON.stringify(b200.feed));
+      globalThis.fetch = async () => new Response('<html><head><title>Sign in - Google Accounts</title></head></html>',
+        { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+      const rHtml = await fn.onRequestGet({ env: { GCAL_ICS_URL: 'https://calendar.google.com/calendar/ical/x/private-y/basic.ics' } });
+      const bHtml = await rHtml.json();
+      ok('fn: v523 a web page instead of a calendar → 502 not_ical with its title',
+        rHtml.status === 502 && bHtml.error === 'not_ical' && bHtml.feed.pageTitle === 'Sign in - Google Accounts', JSON.stringify(bHtml));
+      ok('fn: v523 diagnostics never include the secret address', JSON.stringify(bHtml).indexOf('private-y') === -1, JSON.stringify(bHtml));
       globalThis.fetch = async () => new Response('nope', { status: 404 });
       const r502 = await fn.onRequestGet({ env: { GCAL_ICS_URL: 'https://example.com/a.ics' } });
       ok('fn: upstream failure → 502', r502.status === 502, String(r502.status));

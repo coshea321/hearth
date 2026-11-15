@@ -24,3 +24,9 @@ Design record and setup for the Home calendar card. Confirmed with Cathal 15/11/
 - More calendars later = more variables plus a `cal` field per event for colour; deliberately not built (Cathal chose one).
 - The parser covers what Google emits (DATE/DATE-TIME, TZID/UTC/floating, DTEND/DURATION, RRULE DAILY/WEEKLY/MONTHLY/YEARLY with INTERVAL/COUNT/UNTIL/BYDAY/BYMONTHDAY/BYMONTH/WKST, EXDATE, RECURRENCE-ID moves and cancellations, STATUS:CANCELLED). Rarer rule parts (BYSETPOS, BYWEEKNO…) show the first date only rather than guessing. Pinned by `tests/cases/97-home-calendar.js`, which loads the function in Node.
 - **A series repeats in its OWN zone (UTC included) and is converted to Irish time per occurrence** — converting the first start and repeating in Irish time shifts a `…Z` weekly slot by an hour after the clocks change. **The card compares against Irish time (`hcalNow`), not the phone's clock**, because every event comes back in `Europe/Dublin`. A timed event's `endDate` is its real end date, so one ending at 00:00 belongs to the next day. All three were Codex findings on #294, fixed before merge.
+
+## Troubleshooting (v523)
+Open `/api/calendar` on the live site in a signed-in browser. The `feed` block says what Google sent:
+- `summary.calendar` / `summary.events` — which calendar the address belongs to and how many events it holds in total. **0 events** = the feed itself is empty (wrong calendar, or the *public* address of a private calendar, which Google serves empty). `newestStart` shows how recent its latest event is — if that is older than events you just added, Google's feed hasn't caught up yet (it can lag by hours).
+- `error: "not_ical"` with a `pageTitle` — Google sent a web page, not a calendar: the address is wrong or was reset. Copy the **Secret address in iCal format** again.
+- `error: "upstream"` with `feed.status` — Google refused (404 = address no longer valid).
