@@ -1099,7 +1099,7 @@ li.rcp-done.rcp-ing{text-decoration:line-through}
     </div>
     <div class="home-week-strip" id="homeWeekStrip"></div>
 
-    <div style="text-align:center;margin-top:20px;font-size:11px;color:#C8BEA8;font-weight:600;letter-spacing:.4px" id="appVersionLabel">v523 · 15/11/2026</div>
+    <div style="text-align:center;margin-top:20px;font-size:11px;color:#C8BEA8;font-weight:600;letter-spacing:.4px" id="appVersionLabel">v525 · 15/11/2026</div>
 
   </div>
 </div>
@@ -2637,10 +2637,13 @@ function getCats()  { return getAllCats(currentList); }
 // ============================================================
 // DETECTION
 // ============================================================
-function detectCat(name) {
-  if (!name) return "other";
+function detectCat(name) { return detectCatFor(currentList, name); }
+// v525: the same keyword match for a named list, so code that adds to a list
+// other than the open one (the Alexa inbox) categorises exactly like a manual add.
+function detectCatFor(lt, name) {
+  if (!name || !LIST_CONFIG[lt]) return "other";
   var low = name.toLowerCase();
-  var kw = LIST_CONFIG[currentList].kw;
+  var kw = LIST_CONFIG[lt].kw;
   for (var i = 0; i < kw.length; i++) {
     if (low.indexOf(kw[i][0]) !== -1) return kw[i][1];
   }
@@ -17176,6 +17179,7 @@ document.getElementById("logoutBtn").addEventListener("click", function() {
 document.getElementById("leaveHouseholdBtn").addEventListener("click", function() {
   confirmDialog("Leave this household?", function() {
     if (hearthSyncES) { hearthSyncES.close(); hearthSyncES = null; }
+    if (hearthInboxES) { hearthInboxES.close(); hearthInboxES = null; } // v525
     firebaseFetch(houseUrl("/members/" + hearthUser), { method:"DELETE" }).catch(function(){});
     firebaseFetch(userUrl("/household"), { method:"DELETE" }).catch(function(){});
     hearthHouse = ""; storeSet("hearth_household","");
@@ -18576,6 +18580,7 @@ function onLoginSuccess() {
 function logout(silent) {
   if (hearthSyncES)   { hearthSyncES.close();   hearthSyncES = null; }
   if (hearthHealthES) { hearthHealthES.close();  hearthHealthES = null; }
+  if (hearthInboxES)  { hearthInboxES.close();   hearthInboxES = null; } // v525
   hearthUser = ""; hearthToken = ""; hearthHouse = "";
   hearthIdToken = ""; hearthTokenExpiry = 0; // v463: a cached id token must not outlive logout
   _personalFetchOk = false; _householdFetchOk = false; // v419: a new session must read before it pushes
@@ -19908,6 +19913,9 @@ function startSSEFallback() {
       fetchHousehold();
       startListening();
     }
+    // v525: one small read of the Alexa inbox, in case its stream dropped or
+    // an entry arrived while this device couldn't add it yet.
+    if (isHouseholdSet()) drainAlexaInbox();
   }, 5 * 60 * 1000); // every 5 minutes
 }
 
@@ -19985,6 +19993,7 @@ function startListening() {
       if (hearthSyncES && hearthSyncES.readyState === 2) scheduleHouseholdReconnect();
     };
   });
+  startInboxListening(); // v525: the Alexa grocery inbox rides alongside the household stream
 }
 function handleHouseholdEvent(e) {
   // Apply incoming sync immediately. The v245 list/recipe merges (union by id +
@@ -20534,6 +20543,132 @@ window.addEventListener("DOMContentLoaded", function() {
   });
 });
 
+// ── Alexa → Grocery inbox (v525) ──────────────────────────
+// "Alexa, tell Hearth to add milk and eggs" reaches the Pages Function
+// functions/api/alexa.js, which writes the raw phrase to
+//   /hearth/households/<code>/inbox/<push id>  = { text, ts, src:"alexa" }
+// and nothing else. This device reads that inbox, splits the phrase into
+// items, sorts each into a grocery category exactly like a manual add, adds
+// them to the grocery list, saves + pushes as usual, then deletes the entry.
+//
+// WHY AN INBOX, NOT A WRITE INTO /shared: every device PUTs the whole /shared
+// document (pushHousehold), so an item the function wrote there could be
+// overwritten by a push that was already on its way. /inbox is never touched
+// by pushHousehold. Do NOT move this into /shared.
+//
+// Two devices may drain the same entry at once. Item ids are derived from the
+// entry's server timestamp (ts + index), so both create the SAME item and the
+// union-by-id merge keeps one. Same reason a tombstoned id is skipped.
+var hearthInboxES = null;
+var _inboxDraining = false, _inboxAgain = false;
+
+function startInboxListening() {
+  if (_isTestBuild) return;
+  if (!isHouseholdSet()) return;
+  if (hearthInboxES) { hearthInboxES.close(); hearthInboxES = null; }
+  getAuthToken(function(token) {
+    if (hearthApiKey && !token) return; // the household listener reports login problems
+    var url = houseUrl("/inbox") + (token ? "?auth=" + token : "");
+    hearthInboxES = new EventSource(url);
+    function onEv(e) {
+      try {
+        var p = JSON.parse(e.data);
+        if (p && p.data != null) drainAlexaInbox();
+      } catch (err) { console.warn("SSE inbox event error:", err); }
+    }
+    hearthInboxES.addEventListener("put", onEv);
+    hearthInboxES.addEventListener("patch", onEv);
+  });
+}
+
+function alexaInboxReady() {
+  return !_isTestBuild && !_seedTainted && isHouseholdSet() && isSynced("grocery") && _householdFetchOk;
+}
+
+function drainAlexaInbox() {
+  if (!alexaInboxReady()) return;
+  if (_inboxDraining) { _inboxAgain = true; return; }
+  _inboxDraining = true;
+  firebaseFetch(houseUrl("/inbox"))
+    .then(function(r){ return (r && r.ok) ? r.json() : null; })
+    .then(function(d){
+      var keys = applyAlexaInbox(d);
+      keys.forEach(function(k){
+        firebaseFetch(houseUrl("/inbox/" + encodeURIComponent(k)), { method:"DELETE" }).catch(function(){});
+      });
+    })
+    .catch(function(){})
+    .then(function(){
+      _inboxDraining = false;
+      if (_inboxAgain) { _inboxAgain = false; drainAlexaInbox(); }
+    });
+}
+
+// Split what Alexa heard into item names. Reuses the voice-capture splitter
+// (commas / "and" / "then" / "plus"), after dropping the carrier words Alexa
+// can leave on either end ("some milk", "eggs to the shopping list").
+function parseAlexaItems(text) {
+  var t = String(text || "").slice(0, 300)
+    .replace(/\s+(?:to|on|onto|in)\s+(?:the|my|our)\s+(?:hearth\s+)?(?:grocery|groceries|shopping)?\s*list\s*$/i, "")
+    .replace(/[.!?]+$/, "");
+  return parseVoiceItems(t).map(function(s){
+    return s.replace(/^(?:some|a|an|the|more)\s+/i, "").trim();
+  }).filter(Boolean).map(function(s){
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  });
+}
+
+// Apply an /inbox snapshot to the grocery list. Returns the entry keys that
+// are now safe to delete — none if the local save failed, so nothing is lost.
+function applyAlexaInbox(d) {
+  if (!d || typeof d !== "object") return [];
+  var lt = "grocery";
+  loadListData(lt);
+  var tombs = getTombs(lt), keys = [], added = [], changed = false;
+  Object.keys(d).sort().forEach(function(k) {
+    keys.push(k);
+    var e = d[k];
+    if (!e || typeof e !== "object" || typeof e.text !== "string") return;
+    var ts = (typeof e.ts === "number" && isFinite(e.ts) && e.ts > 0) ? Math.floor(e.ts) : Date.now();
+    parseAlexaItems(e.text).forEach(function(name, i) {
+      var res = alexaAddGrocery(name, ts + i, tombs);
+      if (res === "added" || res === "restored") { changed = true; added.push(name); }
+    });
+  });
+  if (changed) {
+    if (!storeSet(LIST_CONFIG[lt].key, listData[lt])) return [];
+    pushPersonal();
+    if (isHouseholdSet() && isSynced(lt)) pushHousehold();
+    flushSyncRenders({ list:true, dots:true, home:true });
+    toast("&#x1F50A; Alexa added " + esc(added.join(", ")) + " to Grocery");
+  }
+  return keys;
+}
+
+// One item: "added" | "restored" | "exists" | "deleted". Mirrors the Home
+// quick-add (doHqpAdd): an undone match is left alone, a done match is moved
+// back to the list, otherwise a new item in its detected category.
+function alexaAddGrocery(name, id, tombs) {
+  var lt = "grocery", items = listData[lt].items, low = name.toLowerCase();
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    if (!it || typeof it.name !== "string") continue;
+    if (it.id === id) return "exists";               // another device got here first
+    if (it.name.toLowerCase() !== low) continue;
+    if (!it.done) return "exists";
+    it.done = false; clearPersonChecks(it);
+    it.updated = Date.now(); it.added = Date.now();
+    addToHistFor(lt, it.name, it.catId);
+    markUnseen(lt, it.id);
+    return "restored";
+  }
+  if (tombs && tombs[id] != null) return "deleted";   // already added and deleted elsewhere
+  var catId = detectCatFor(lt, name);
+  items.unshift({ id:id, name:name, catId:catId, done:false, dueDate:null, addedBy:"alexa", updated:id, added:id });
+  addToHistFor(lt, name, catId);
+  markUnseen(lt, id);
+  return "added";
+}
 // ── Swipe left/right to switch sub-tabs (Lists/Baby/Track) ──
 // Bound to document.body rather than the individual section divs: a section
 // div is only as tall as its rendered content, so on a sparse view (e.g. an
@@ -25006,6 +25141,7 @@ function applyHousehold(data) {
   var _rDirty = {}; // v375: render targets touched by this apply cycle (see flushSyncRenders)
   // Declared outside the try so the partner-added toast below is still safe if a merge throws.
   var _newFromOther = {}; // lt → count of new items added by the other user
+  var _newFromAlexa = 0;  // v525: of those, how many came in by Alexa (toast says "Alexa", not the partner)
   try {
   var _listRepush = false; // true if our merge is fuller/newer than /shared → re-push to converge
   ["grocery","todo","travel","personal"].forEach(function(lt) {
@@ -25022,6 +25158,7 @@ function applyHousehold(data) {
       if (it && it.addedBy && it.addedBy !== hearthUser && !it.done &&
           !existingIds[it.id] && !seen[it.id]) {
         _newFromOther[lt] = (_newFromOther[lt]||0) + 1;
+        if (it.addedBy === "alexa") _newFromAlexa++;
         markUnseen(lt, it.id);
       }
     });
@@ -25226,7 +25363,7 @@ function applyHousehold(data) {
   Object.keys(_newFromOther).forEach(function(lt){ _totalNew += _newFromOther[lt]; if(!_firstLt) _firstLt = lt; });
   if (_totalNew > 0) {
     var ltName = _firstLt ? (LIST_TYPES[_firstLt] ? LIST_TYPES[_firstLt].name.replace(/&#x[0-9A-Fa-f]+;\s*/,"") : _firstLt) : "";
-    var partner = hearthUser === "cathal1" ? "Petra" : "Cathal";
+    var partner = _newFromAlexa === _totalNew ? "Alexa" : (hearthUser === "cathal1" ? "Petra" : "Cathal");
     toast("&#x1F465; " + partner + " added " + _totalNew + " item" + (_totalNew!==1?"s":"") + (_firstLt && _totalNew===_newFromOther[_firstLt] ? " to " + ltName : ""));
   }
 }

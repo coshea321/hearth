@@ -223,6 +223,7 @@ document.getElementById("logoutBtn").addEventListener("click", function() {
 document.getElementById("leaveHouseholdBtn").addEventListener("click", function() {
   confirmDialog("Leave this household?", function() {
     if (hearthSyncES) { hearthSyncES.close(); hearthSyncES = null; }
+    if (hearthInboxES) { hearthInboxES.close(); hearthInboxES = null; } // v525
     firebaseFetch(houseUrl("/members/" + hearthUser), { method:"DELETE" }).catch(function(){});
     firebaseFetch(userUrl("/household"), { method:"DELETE" }).catch(function(){});
     hearthHouse = ""; storeSet("hearth_household","");

@@ -85,6 +85,10 @@ password known to have leaked.
             ".write": "auth != null"
           },
 
+          "inbox": {
+            ".write": "auth != null"
+          },
+
           "members": {
             "$member": {
               ".write": "auth != null && $member.toLowerCase() === auth.token.email.replace('@hearth.app', '')"
@@ -96,6 +100,8 @@ password known to have leaked.
   }
 }
 ```
+
+**v525:** `inbox` is where the Alexa function drops grocery phrases (`HEARTH-alexa.md`). Leave it out and Alexa silently stops working.
 
 **Why each part is shaped that way:**
 

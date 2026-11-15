@@ -19,6 +19,9 @@ function startSSEFallback() {
       fetchHousehold();
       startListening();
     }
+    // v525: one small read of the Alexa inbox, in case its stream dropped or
+    // an entry arrived while this device couldn't add it yet.
+    if (isHouseholdSet()) drainAlexaInbox();
   }, 5 * 60 * 1000); // every 5 minutes
 }
 
@@ -96,6 +99,7 @@ function startListening() {
       if (hearthSyncES && hearthSyncES.readyState === 2) scheduleHouseholdReconnect();
     };
   });
+  startInboxListening(); // v525: the Alexa grocery inbox rides alongside the household stream
 }
 function handleHouseholdEvent(e) {
   // Apply incoming sync immediately. The v245 list/recipe merges (union by id +

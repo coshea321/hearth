@@ -20,7 +20,7 @@
 3. **`HEARTH-backlog.md`** — add anything the version opened, and **move** anything it closed out of § Pending to the top of `HEARTH-archive.md` § Completed backlog items (22/09/2026: leaving struck-through items in place is how Pending grew to 80 KB).
 
 ## Current version
-**v523 · 15/11/2026** — last shipped build (version label is **date-only**, sourced from `sw.js` VERSION constant — but since v382 **only when the announced SW version is not NEWER than the loaded page**; see the v382 entry in `HEARTH-changelog.md`).
+**v525 · 15/11/2026** — last shipped build (version label is **date-only**, sourced from `sw.js` VERSION constant — but since v382 **only when the announced SW version is not NEWER than the loaded page**; see the v382 entry in `HEARTH-changelog.md`).
 
 ## Train programme safety content (v415, re-reviewed v446, merged v447) — four rules
 The Train programmes carry Cathal's clinical constraints as on-screen text. The precise history, as of 30/08/2026: **a 4 cm hiatus hernia, mild bilateral L5/S1 _foraminal_ stenosis and an L4/L5 disc bulge.** Foraminal (not central canal) narrowing closes on **extension, side-bending and rotation**; the L4/L5 bulge is loaded by **end-range and loaded flexion**. So the target is the **middle of the range in both directions** — the generic "flexion opens the spinal canal" advice is written for central canal stenosis and only half applies here. Three rules:
@@ -93,7 +93,7 @@ Two paths that share one rule, and the rule is the reason both needed care.
 - **Later, optional, each its own version and confirm:** finer CSS split; grouping each store's merge function with its section. Never mixed into a feature change.
 - **Hosting:** Cloudflare Pages at `miniature-journey-b9p.pages.dev`, behind a Cloudflare Access login (since 31/08/2026). GitHub Pages (`coshea321.github.io/miniature-journey`) is switched off; it stays in `_prodHosts` only as a harmless leftover. See `HEARTH-cloudflare-access.md`.
 - **Storage:** localStorage (primary) + Firebase Realtime Database (household sync between the two users)
-- **Server-side code (v521):** one Cloudflare Pages Function, `functions/api/calendar.js` (`/api/calendar`), for the Home calendar card. Pages builds `functions/` automatically; it reads the secret `GCAL_ICS_URL` from the Pages project settings and is behind the same Access gate. `sw.js` passes every `/api/` request straight to the network. Full record: `HEARTH-calendar.md`.
+- **Server-side code (v521, v525):** Cloudflare Pages Functions — `functions/api/calendar.js` (`/api/calendar`, the Home calendar card) and `functions/api/alexa.js` (`/api/alexa`, the Alexa skill, v525: the ONE path outside the Access gate, protected by Amazon's signature instead — `HEARTH-alexa.md`). Calendar: Pages builds `functions/` automatically; it reads the secret `GCAL_ICS_URL` from the Pages project settings and is behind the same Access gate. `sw.js` passes every `/api/` request straight to the network. Full record: `HEARTH-calendar.md`.
 - **Users:** `cathal1` (Cathal) and `petra`. Items can carry `addedBy` and sync between devices.
 
 ## Who maintains it & how

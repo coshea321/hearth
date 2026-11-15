@@ -1,0 +1,33 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "hearth",
+      "intents": [
+        {
+          "name": "AddItemsIntent",
+          "slots": [
+            { "name": "items", "type": "AMAZON.SearchQuery" }
+          ],
+          "samples": [
+            "add {items}",
+            "to add {items}",
+            "add {items} to the list",
+            "add {items} to the shopping list",
+            "add {items} to the grocery list",
+            "put {items} on the list",
+            "put {items} on the shopping list",
+            "we need {items}",
+            "we're out of {items}",
+            "buy {items}"
+          ]
+        },
+        { "name": "AMAZON.HelpIntent", "samples": [] },
+        { "name": "AMAZON.CancelIntent", "samples": [] },
+        { "name": "AMAZON.StopIntent", "samples": [] },
+        { "name": "AMAZON.NavigateHomeIntent", "samples": [] },
+        { "name": "AMAZON.FallbackIntent", "samples": [] }
+      ],
+      "types": []
+    }
+  }
+}
