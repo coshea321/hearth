@@ -477,6 +477,7 @@ function onLoginSuccess() {
 function logout(silent) {
   if (hearthSyncES)   { hearthSyncES.close();   hearthSyncES = null; }
   if (hearthHealthES) { hearthHealthES.close();  hearthHealthES = null; }
+  if (hearthInboxES)  { hearthInboxES.close();   hearthInboxES = null; } // v527
   hearthUser = ""; hearthToken = ""; hearthHouse = "";
   hearthIdToken = ""; hearthTokenExpiry = 0; // v463: a cached id token must not outlive logout
   _personalFetchOk = false; _householdFetchOk = false; // v419: a new session must read before it pushes
