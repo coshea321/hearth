@@ -41,9 +41,66 @@ window.__hearthSplashGoneHook = function() {
 window.__hearthBootGateArmed = true;
 hideBootSplash();
 
-function showUpdateBanner() {
+function showUpdateBanner(version) {
   var banner = document.getElementById("updateBanner");
   if (banner) banner.style.display = "flex";
+  autoUpdateArm(version);
+}
+
+// ── Always-on screens take updates by themselves (v524) ───────────────
+// A page that is never reloaded (the kitchen kiosk phone running Fully Kiosk
+// Browser) only checked for a new build when it was opened, so it stayed on
+// the version it first loaded indefinitely. Now:
+//  1. the worker is asked to check for a new build every hour, and whenever
+//     the screen comes back on (visibilitychange → visible);
+//  2. once a strictly newer build is ACTIVE (the banner case), the page
+//     reloads itself — but only when nobody could lose anything:
+//     on Home, no overlay/dialog open, nothing focused for typing, and no
+//     touch/key for 5 minutes. Otherwise the banner just waits and this
+//     re-checks every minute.
+// This is NOT the old boot-time reload (v312 bootStaleReload, removed at
+// v356 because a stalled reload could freeze startup): it never runs during
+// boot, only after an idle wait on a fully loaded page, and at most once per
+// target version per tab (sessionStorage guard), so it cannot loop. The new
+// worker has already activated and pre-cached the new shell before
+// SW_UPDATED arrives, so one reload is enough.
+var AUTO_UPDATE_IDLE_MS = 5 * 60 * 1000;
+var AUTO_UPDATE_CHECK_MS = 60 * 60 * 1000;
+var _lastUserInput = Date.now();
+var _autoUpdateTimer = null;
+var _autoUpdateTarget = "";
+["pointerdown", "keydown", "input", "touchstart", "wheel"].forEach(function(t){
+  document.addEventListener(t, function(){ _lastUserInput = Date.now(); }, { capture: true, passive: true });
+});
+
+// Pure decision, separated for the tests. Returns "" when safe, else why not.
+function autoUpdateBlocker(now) {
+  if (typeof currentSection !== "undefined" && currentSection !== "home") return "not on Home";
+  if (now - _lastUserInput < AUTO_UPDATE_IDLE_MS) return "recent input";
+  var a = document.activeElement;
+  if (a && a !== document.body && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) return "field focused";
+  if (document.querySelector(".overlay.open, #toothModal.open, [aria-modal='true']")) return "dialog open";
+  var so = document.getElementById("sessionOverlay");
+  if (so && getComputedStyle(so).display !== "none") return "session open";
+  return "";
+}
+
+function autoUpdateArm(version) {
+  if (_isPreview || _isTestBuild) return;
+  _autoUpdateTarget = String(version || _swReportedVersion || "");
+  if (!_autoUpdateTimer) _autoUpdateTimer = setInterval(autoUpdateTick, 60 * 1000);
+}
+
+function autoUpdateTick() {
+  if (autoUpdateBlocker(Date.now())) return;
+  var key = "hearthAutoReloadedFor";
+  try {
+    if (sessionStorage.getItem(key) === _autoUpdateTarget) return; // already tried once for this build
+    sessionStorage.setItem(key, _autoUpdateTarget);
+  } catch (e) { return; } // no sessionStorage = no loop guard = no auto reload
+  clearInterval(_autoUpdateTimer);
+  _autoUpdateTimer = null;
+  location.reload();
 }
 
 // ── Stuck-worker visibility + escape hatch (v426) ─────────────────────
@@ -117,6 +174,12 @@ if ("serviceWorker" in navigator && !_isPreview && !_isTestBuild) {
     if (navigator.serviceWorker.controller) {
       navigator.serviceWorker.controller.postMessage({ type: "GET_VERSION" });
     }
+    // v524: keep checking on a page that never closes (kiosk) — hourly, and
+    // when the screen comes back on. Offline checks are skipped, not queued.
+    setInterval(function(){ if (navigator.onLine) reg.update().catch(function(){}); }, AUTO_UPDATE_CHECK_MS);
+    document.addEventListener("visibilitychange", function(){
+      if (document.visibilityState === "visible" && navigator.onLine) reg.update().catch(function(){});
+    });
   }).catch(function(err){ console.error("SW registration failed:", err); });
 
   navigator.serviceWorker.addEventListener("controllerchange", function() {
@@ -151,7 +214,7 @@ if ("serviceWorker" in navigator && !_isPreview && !_isTestBuild) {
       // never banner/reload when this page already is the new build, and
       // never when the page is FRESHER than a not-yet-replaced old SW —
       // its replacement is installing and will announce itself shortly).
-      if (_verNum(e.data.version) > _verNum(PAGE_VERSION)) showUpdateBanner();
+      if (_verNum(e.data.version) > _verNum(PAGE_VERSION)) showUpdateBanner(e.data.version);
     }
   });
 }
