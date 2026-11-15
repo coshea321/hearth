@@ -47,6 +47,19 @@ module.exports = {
         ok('a confirm dialog is open: wait', autoUpdateBlocker(now) === 'dialog open', autoUpdateBlocker(now));
         document.body.removeChild(dlg);
 
+        // Codex on #297: the quick-add panel is inline, with a blurred draft.
+        openHqp('grocery', 'Add to Grocery', 'life', 'Item name...');
+        var qi = document.getElementById('homeQuickInput');
+        qi.value = 'milk'; qi.blur();
+        ok('quick-add open with a blurred draft: wait', autoUpdateBlocker(now) === 'quick-add open', autoUpdateBlocker(now));
+        closeHqp(); qi.value = '';
+
+        var ta = document.createElement('textarea');
+        ta.value = 'half-written note';
+        document.getElementById('homeCalendar').parentNode.appendChild(ta);
+        ok('any visible box still holding text: wait', autoUpdateBlocker(now) === 'unsaved text', autoUpdateBlocker(now));
+        ta.parentNode.removeChild(ta);
+
         ok('back to safe once everything is closed', autoUpdateBlocker(now) === '', autoUpdateBlocker(now));
 
         // Test builds never arm the reload timer.

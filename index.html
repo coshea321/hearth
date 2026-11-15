@@ -27418,6 +27418,15 @@ function autoUpdateBlocker(now) {
   if (document.querySelector(".overlay.open, #toothModal.open, [aria-modal='true']")) return "dialog open";
   var so = document.getElementById("sessionOverlay");
   if (so && getComputedStyle(so).display !== "none") return "session open";
+  // Home's quick-add panel is an inline panel, not an overlay (Codex on #297).
+  var hqp = document.getElementById("homeQuickPanel");
+  if (hqp && getComputedStyle(hqp).display !== "none") return "quick-add open";
+  // Belt and braces for any other inline editor: never reload over a visible
+  // text box that still holds something typed.
+  var boxes = document.querySelectorAll("input[type='text'], input[type='search'], input:not([type]), textarea");
+  for (var i = 0; i < boxes.length; i++) {
+    if (boxes[i].value && boxes[i].offsetParent !== null) return "unsaved text";
+  }
   return "";
 }
 
