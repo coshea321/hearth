@@ -49,6 +49,7 @@ Small, certain corrections that are **not worth a version of their own** but mus
 
 - ~~**`index.html` — the `HIDEABLE_SECTIONS` comment says "Track hosts Log/Food/Body (v339)".**~~ — **fixed v442** (27/08/2026).
 - ~~**`HEARTH-notes.md` — the § Architecture bullet says `index.html` is "~12,100 lines, ~715k at v326".**~~ — **fixed v442** (27/08/2026), parenthetical deleted.
+- **`functions/api/alexa.js` — the header comment says "Alexa, tell Hearth to add milk and eggs."** The skill's spoken name has been **"family hub"** since 16/11/2026 (`HEARTH-alexa.md` § Decisions). Change "Hearth" to "family hub" in that one line.
 
 ## Pending / next steps (not yet built)
 - **SOURCE SPLIT follow-ups (phase 1 shipped v518; design record moved to `HEARTH-archive.md` § Completed backlog items, layout in `HEARTH-notes.md` § Source split).** Optional, each its own version and confirm, Sonnet is fine: a finer CSS split; grouping each store's merge function with its section. Never mixed into a feature change.

@@ -210,7 +210,8 @@ echo "  note $(grep -c '</script>' index.html) literal </script> and $(grep -c '
 # Adding one: append "<file>|<literal string>|<what to do>" to the list, and
 # strike the item through in the backlog when it ships.
 PIGGYBACK="index.html|Track hosts Log/Food/Body|add Medicine — it has been a Track sub-tab since v380
-HEARTH-notes.md|~12,100 lines|delete the size parenthetical; CLAUDE.md says this file quotes no size"
+HEARTH-notes.md|~12,100 lines|delete the size parenthetical; CLAUDE.md says this file quotes no size
+functions/api/alexa.js|Alexa, tell Hearth to add|the Alexa skill spoken name is family hub since 16/11/2026 — change Hearth in that header comment"
 while IFS='|' read -r pf ps pmsg; do
   [ -z "$pf" ] && continue
   if [ -f "$pf" ] && grep -qF "$ps" "$pf"; then
