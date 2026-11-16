@@ -1,6 +1,6 @@
 # Hearth — Alexa → Grocery list (v527)
 
-Design record and setup. Confirmed with Cathal 15/11/2026: **"Alexa, tell Hearth to add milk and eggs"**; several items in one go; items **sorted into grocery categories**; **add-only** (Alexa never reads the list out).
+Design record and setup. Confirmed with Cathal 15/11/2026: **"Alexa, tell family hub to add milk and eggs"** (spoken name renamed from "hearth" on 16/11/2026, see Decisions); several items in one go; items **sorted into grocery categories**; **add-only** (Alexa never reads the list out).
 
 ## How it works
 - **Why not Alexa's own shopping list:** "Alexa, add X to my shopping list" always goes to Amazon's built-in list, and Amazon closed third-party access to that list in 2024. So this is a private custom skill with its own invocation name.
@@ -16,6 +16,8 @@ Design record and setup. Confirmed with Cathal 15/11/2026: **"Alexa, tell Hearth
 - **Categorising happens in the app, not the function.** That keeps one keyword table (`GROCERY_KW`) and no second copy to drift.
 - **`/api/alexa` is OUTSIDE the Cloudflare Access login** (Alexa cannot sign in). It is protected instead by: Amazon's `Signature-256` over the raw body, the cert URL pinned to `https://s3.amazonaws.com/echo.api/…`, the cert in date and naming `echo-api.amazon.com`, the timestamp within 150 s, and the skill id equal to the `ALEXA_SKILL_ID` secret. Every check is required; a missing secret rejects everything. **Known limit:** the certificate chain up to Amazon's root CA is not re-verified, because a zero-dependency function has no X.509 library. The URL pin is what vouches for the certificate. Worst case if that were ever beaten: someone adds grocery items. The endpoint cannot read or delete anything.
 - If the deferred Firebase rules tightening (`HEARTH-firebase-rules.md` § proposed replacement) is ever applied, it must add `"inbox": { ".write": "auth != null" }` under `$code`, or Alexa stops working.
+
+- **The spoken name is "family hub", NOT "hearth" (16/11/2026).** "hearth" was accepted by the console and worked when typed in the Test tab, but by voice Alexa heard it as "hive" (sent to her own shopping list) and "heart" (Heart radio on Spotify). The name lives only in the Amazon console (Build → Invocations) and in `HEARTH-alexa-model.json`; nothing in the app or the function depends on it. A replacement name must be two words, and must avoid "list" and anything that sounds like a brand or station. **Diagnose mishearing** in the Alexa app → Settings → Alexa Privacy → Review Alexa History, which shows what she transcribed.
 
 Pinned by `tests/cases/98-alexa-grocery.js`. It loads the function in Node, signs requests with a key generated at test time and builds a certificate by hand, so no key is ever committed.
 
@@ -33,7 +35,7 @@ Pinned by `tests/cases/98-alexa-grocery.js`. It loads the function in Node, sign
 
 **B. The skill.** Sign in at developer.amazon.com with the **same Amazon account the Echo uses**, then Alexa Skills Kit → Console.
 1. **Create Skill.** Name: Hearth. Locale: **English (UK)**, or whatever language the Echo is set to; they must match. Type **Custom**, hosting **Provide your own**, template **Start from scratch**.
-2. **Build → Interaction Model → JSON Editor.** Paste all of `docs/HEARTH-alexa-model.json` → **Save** → **Build skill**. If the console refuses the one-word invocation name "hearth", use "hearth list" and say "Alexa, tell Hearth list to add …".
+2. **Build → Interaction Model → JSON Editor.** Paste all of `docs/HEARTH-alexa-model.json` → **Save** → **Build skill**. The invocation name is `family hub` (see Decisions for why not "hearth").
 3. **Build → Endpoint → HTTPS.** Default region: `https://miniature-journey-b9p.pages.dev/api/alexa`. Certificate option: **"My development endpoint is a sub-domain of a domain that has a wildcard certificate from a certificate authority"** → **Save**.
 4. Copy the **Skill ID** (`amzn1.ask.skill.…`, at the top of the Endpoint page) into the `ALEXA_SKILL_ID` secret.
 5. **Test tab** → set "Skill testing is enabled in" to **Development**.
@@ -42,7 +44,7 @@ Pinned by `tests/cases/98-alexa-grocery.js`. It loads the function in Node, sign
 
 **D. Redeploy** (Deployments → latest → ⋯ → Retry deployment) so the secrets reach the function, or just merge the next PR.
 
-**E. Try it.** Use the console's Test tab first: type `tell hearth to add milk and eggs`. Then try it on the Echo.
+**E. Try it.** Use the console's Test tab first: type `tell family hub to add milk and eggs`. Then try it on the Echo.
 
 ## Troubleshooting
 - **Alexa says "there was a problem with the requested skill's response"**: the function refused the request. Usually `ALEXA_SKILL_ID` is missing or wrong, or step D was not done.
