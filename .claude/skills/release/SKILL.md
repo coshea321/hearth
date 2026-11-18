@@ -23,6 +23,11 @@ continuing:
    DD/MM/YYYY. Format is exactly `vNNN · DD/MM/YYYY` — date only, no time.
    If the working tree has already been bumped this session, don't bump
    twice — verify and continue.
+   **Documentation-only exception:** if nothing in `src/`, `index.html`,
+   `sw.js` or `build.js` differs from `origin/main`, skip steps 1–2 and the
+   changelog entry in step 3, and use a `docs: <summary>` commit message in
+   step 5. `tests/checks.sh` reports the app files unchanged and passes
+   without a bump.
 2. **Bump both files, then build.** Edit the one-line `VERSION` constant in
    `sw.js` and the `appVersionLabel` div in **`src/index.html`** to the same
    new string — never the root `index.html`, which is build output. Then run
