@@ -600,6 +600,7 @@ function recipesFromCSV(text) {
 }
 
 var RECIPE_FILE_TAG = "recipe-v1";
+var RECIPE_EXPORT_FROM = "hearth"; // marks a file Hearth's own Export wrote (v529)
 
 // The template Cathal hands to an AI chat (a photo, a page, or pasted text of
 // a recipe) to get back JSON the paste box below accepts. ingredients stays a
@@ -666,11 +667,16 @@ function recipesFromAIJSON(raw) {
   var list = Array.isArray(obj.recipes) ? obj.recipes : [obj];
   var takenIds = recipeIdMap(getRecipeBook());
   var recipes = [], tidied = 0;
+  // A file Hearth exported itself (v529, from:"hearth") is the editor's own
+  // text, so it parses the way the editor does — brackets KEPT. An AI reply
+  // or pasted page keeps the bracket strip: that's scraped clutter. Without
+  // this, "2 eggs (whites only)" came back as "2 eggs" on a round trip.
+  var stripParens = obj.from !== RECIPE_EXPORT_FROM;
   list.forEach(function(o, i){
     if (!o || typeof o !== "object") return;
     var name = String(o.name || "").trim();
     if (!name) return;
-    var ingredients = parseIngredients(String(o.ingredients || ""), true).map(function(ing){
+    var ingredients = parseIngredients(String(o.ingredients || ""), stripParens).map(function(ing){
       var t = tidyIngredient(ing);
       if (t.ok && t.changed) tidied++;
       return t.ok ? t.ing : ing;
@@ -700,6 +706,81 @@ function recipesFromImportText(text) {
   var t = stripPasteFence(text);
   if (t.charAt(0) === "{") return recipesFromAIJSON(t);
   return recipesFromCSV(t);
+}
+
+// ── Recipe export (v529) ──
+// A recipe-v1 file the import box above reads straight back in. EXPORT ONLY:
+// it writes nothing, and the import it feeds stays add-only (names already in
+// the book are skipped), so no favourite, lastCooked, inRotation or grocery
+// preference is ever in a blast radius. Carries exactly the fields
+// recipesFromAIJSON reads — the recipe itself, not this book's own
+// bookkeeping (stars, rotation, cooking history stay personal). Ingredients go
+// out as the editor's own "one per line" text via ingredientToLine, which
+// round-trips headers as <b>…</b>; the from:"hearth" marker tells the import
+// to keep bracketed text the AI path strips. Per-ingredient grocery flags (noBuy etc.)
+// do not survive a text line, by design. Do NOT widen this into a
+// matched-by-name UPDATE import without a fresh design confirm (backlog ⓪).
+function recipeExportObj(r) {
+  return {
+    name:        String(r.name || ""),
+    servings:    parseInt(r.servings, 10) || 1,
+    category:    String(r.category || "").trim(),
+    ingredients: (r.ingredients || []).filter(function(i){ return i && i.name; }).map(ingredientToLine).join("\n"),
+    prep:        String(r.prep || ""),
+    method:      String(r.method || ""),
+    notes:       String(r.notes || ""),
+    kcal:        parseInt(r.kcal, 10) || 0,
+    url:         String(r.url || "")
+  };
+}
+
+// filter: "fav" | "all" | a category name — the Calorie helper's chip meanings.
+function recipeExportPayload(filter) {
+  var list = calHelperPool(true, filter).slice().sort(function(a, b){
+    return String(a.name || "").localeCompare(String(b.name || ""));
+  });
+  return { hearth: RECIPE_FILE_TAG, from: RECIPE_EXPORT_FROM, recipes: list.map(recipeExportObj) };
+}
+
+function recipeExportFilename(filter) {
+  var part = (!filter || filter === "all") ? "all" : filter === "fav" ? "favourites" : plantFileSlug(filter);
+  return "hearth-recipes-" + part + "-" + foodTodayStr() + ".json";
+}
+
+function openRecipeExportSheet() {
+  var filter = calHelperHasFav() ? "fav" : "all"; // the recipe list's own default-to-fav fallback
+  var ov = document.createElement("div");
+  ov.style.cssText = "position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(0,0,0,.55);z-index:700;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box";
+  var box = document.createElement("div");
+  box.style.cssText = "background:#fff;border-radius:14px;padding:20px;width:100%;max-width:380px;max-height:85vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2)";
+  ov.appendChild(box);
+  function close() { if (ov.parentNode) document.body.removeChild(ov); }
+  function draw() {
+    var n = calHelperPool(true, filter).length;
+    box.innerHTML =
+      "<div style='font-family:Georgia,serif;font-size:18px;font-weight:600;color:#2A2010;margin-bottom:6px'>&#x1F4E4; Export recipes</div>" +
+      "<div style='font-size:13px;color:#6A5A40;line-height:1.5;margin-bottom:12px'>Saves a Hearth recipe file. Another Hearth can load it with &#x22EF; &rarr; Import &mdash; recipes it already has are skipped, never overwritten.</div>" +
+      calFilterBarHTML(filter) +
+      "<div id='rcpExpCount' style='font-size:14px;color:#2A2010;font-weight:600;margin-bottom:14px'>" + n + " " + calFilterLabel(filter) + (n === 1 ? "" : "s") + "</div>" +
+      "<div style='display:flex;gap:8px'>" +
+        "<button id='rcpExpClose' style='flex:1;padding:11px;border:1.5px solid #E0D0B0;border-radius:9px;background:none;font-family:inherit;font-size:14px;cursor:pointer;touch-action:manipulation;color:#7A5A30'>Close</button>" +
+        "<button id='rcpExpDo'" + (n ? "" : " disabled") + " style='flex:1;padding:11px;border:none;background:" + (n ? "#B5651D" : "#D8CEBC") + ";color:#fff;border-radius:9px;font-family:inherit;font-size:14px;font-weight:700;cursor:" + (n ? "pointer" : "default") + ";touch-action:manipulation'>Download</button>" +
+      "</div>";
+    box.querySelectorAll(".cal-filter").forEach(function(b){
+      b.addEventListener("click", function(){ filter = b.getAttribute("data-key"); draw(); });
+    });
+    box.querySelector("#rcpExpClose").addEventListener("click", close);
+    box.querySelector("#rcpExpDo").addEventListener("click", function(){
+      var payload = recipeExportPayload(filter);
+      if (!payload.recipes.length) return;
+      plantDownloadJSON(payload, recipeExportFilename(filter));
+      toast("&#x1F4E4; Exported " + payload.recipes.length + " recipe" + (payload.recipes.length === 1 ? "" : "s"));
+      close();
+    });
+  }
+  ov.addEventListener("click", function(e){ if (e.target === ov) close(); });
+  draw();
+  document.body.appendChild(ov);
 }
 function cleanText(s) {
   s = (s||"").trim();
