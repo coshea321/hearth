@@ -22,7 +22,7 @@ module.exports = {
         { id: 10001, name: 'Fav Stew', servings: 4, kcal: 550, updated: 1, category: 'Dinner', fav: true,
           inRotation: true, lastCooked: '2026-11-01', prep: 'Chop the onion', method: 'Stew it.', notes: 'Freezes well',
           url: 'https://example.com/stew',
-          ingredients: parseIngredients('<b>Base</b>\\n500 g Beef\\n2 tbsp Olive oil') },
+          ingredients: parseIngredients('<b>Base</b>\\n500 g Beef\\n2 tbsp Olive oil\\n2 eggs (whites only)') },
         { id: 10002, name: 'Plain Soup', servings: 2, updated: 1, category: 'Lunch',
           method: 'Simmer it.', ingredients: parseIngredients('300 g Lentils') }
       ]);
@@ -44,9 +44,16 @@ module.exports = {
         r.prep === 'Chop the onion' && r.method === 'Stew it.' && r.notes === 'Freezes well' && r.url === 'https://example.com/stew',
         JSON.stringify(r));
       var orig = getRecipeBook()[0].ingredients;
-      ok('ingredients survive, header included',
-        (r.ingredients || []).map(ingredientToLine).join('|') === orig.map(ingredientToLine).join('|') && !!(r.ingredients[0] || {}).header,
+      ok('ingredients survive, header included (case aside: the import tidy capitalises names)',
+        (r.ingredients || []).map(ingredientToLine).join('|').toLowerCase() === orig.map(ingredientToLine).join('|').toLowerCase() && !!(r.ingredients[0] || {}).header,
         (r.ingredients || []).map(ingredientToLine).join('|'));
+      ok('bracketed ingredient notes survive (the editor keeps them)',
+        (r.ingredients || []).some(function(i){ return /whites only/.test(ingredientToLine(i)); }),
+        (r.ingredients || []).map(ingredientToLine).join('|'));
+      var aiBack = recipesFromImportText(JSON.stringify({ hearth: RECIPE_FILE_TAG, name: 'AI Eggs', ingredients: '2 eggs (whites only)' }));
+      ok('an AI reply (no from:hearth) still has brackets stripped',
+        aiBack.recipes.length === 1 && !/whites/.test(ingredientToLine(aiBack.recipes[0].ingredients[0])),
+        aiBack.recipes.length && ingredientToLine(aiBack.recipes[0].ingredients[0]));
       ok('a re-imported recipe arrives unstarred (stars stay personal)', r.fav === false, String(r.fav));
 
       // ── 3. Sections ────────────────────────────────────────────────────
