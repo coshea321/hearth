@@ -77,6 +77,12 @@ var _autoUpdateTarget = "";
 function autoUpdateBlocker(now) {
   if (typeof currentSection !== "undefined" && currentSection !== "home") return "not on Home";
   if (now - _lastUserInput < AUTO_UPDATE_IDLE_MS) return "recent input";
+  return uiBusyReason();
+}
+
+// v528: the "could anyone lose something?" half of autoUpdateBlocker, shared
+// with the wall screen's return-after-idle (wallIdleBlocker, 20b-wall.js).
+function uiBusyReason() {
   var a = document.activeElement;
   if (a && a !== document.body && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) return "field focused";
   if (document.querySelector(".overlay.open, #toothModal.open, [aria-modal='true']")) return "dialog open";

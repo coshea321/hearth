@@ -289,9 +289,14 @@ function hcalDayLabel(ds, todayStr, tomorrowStr) {
   var p = ds.split("-"), d = new Date(+p[0], +p[1] - 1, +p[2]);
   return ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()] + " " + d.getDate();
 }
+// v528: the same card is painted on the always-on wall screen too.
 function hcalPaint(rec, stale) {
-  var card = document.getElementById("homeCalendar");
-  if (!card) return;
+  ["homeCalendar", "wallCalendar"].forEach(function(id){
+    var card = document.getElementById(id);
+    if (card) hcalPaintInto(card, rec, stale);
+  });
+}
+function hcalPaintInto(card, rec, stale) {
   if (!rec) { card.classList.remove("hcal-show"); card.innerHTML = ""; return; }
   var head = "<div class='hcal-head'><span class='hcal-title'>&#x1F4C5; Calendar</span>";
   if (stale && rec.at) {

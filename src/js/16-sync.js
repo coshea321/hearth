@@ -608,6 +608,8 @@ function flushSyncRenders(dirty) {
   // AFTER renderList, which rebuilds the tab bar they attach to).
   if (dirty.dots)                                                       safeRender("listDots", updateListTabDots);
   if (dirty.home    && currentSection === "home")                       safeRender("home",    renderHomeScreen);
+  // v528: the wall screen sits over Home; redraw its lists on any list change.
+  if ((dirty.list || dirty.home) && wallIsShowing())                    safeRender("wall",    wallRenderLists);
   if (dirty.train   && currentSection === "train")                      safeRender("train",   renderTrainView);
 }
 

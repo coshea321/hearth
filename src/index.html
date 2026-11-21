@@ -129,7 +129,7 @@
   <div class="home-content">
 
     <!-- Version label (v526: moved from the bottom of Home to a discreet top-right line) -->
-    <div style="text-align:right;margin:-4px 0 2px;font-size:10px;color:#C8BEA8;font-weight:600;letter-spacing:.4px" id="appVersionLabel">v527 · 15/11/2026</div>
+    <div style="text-align:right;margin:-4px 0 2px;font-size:10px;color:#C8BEA8;font-weight:600;letter-spacing:.4px" id="appVersionLabel">v528 · 21/11/2026</div>
 
     <!-- Greeting -->
     <div class="home-greeting">
@@ -973,6 +973,16 @@
   </div>
 </div>
 
+<!-- Always-on wall screen (v528) — device-local, sits over Home; see 20b-wall.js -->
+<div id="wallScreen" class="wall" style="display:none" aria-hidden="true">
+  <div class="wall-top">
+    <div><div class="wall-time" id="wallTime"></div><div class="wall-date" id="wallDate"></div></div>
+    <button class="wall-exit" id="wallExit" aria-label="Leave the wall screen">Full app</button>
+  </div>
+  <div class="home-cal" id="wallCalendar"></div>
+  <div id="wallLists"></div>
+</div>
+
 <!-- SETTINGS MODAL -->
 <div class="overlay" id="settingsOverlay">
   <div class="modal-box" style="position:relative">
@@ -1030,6 +1040,13 @@
         <label class="toggle-switch"><input type="checkbox" class="section-chk" data-sec="famlog"><span class="toggle-slider"></span></label>
       </div>
     </div>
+    <div style="height:1px;background:#E8E4DC;margin:16px 0"></div>
+    <div class="sync-section-title" style="margin-bottom:8px">Always-on screen</div>
+    <div class="sync-toggle-row">
+      <span class="sync-toggle-label">&#x1F5BC;&#xFE0F; Use this phone as a wall screen</span>
+      <label class="toggle-switch"><input type="checkbox" id="wallModeChk"><span class="toggle-slider"></span></label>
+    </div>
+    <div style="font-size:12px;color:#7A8772;margin:4px 2px 0;line-height:1.5">Shows just the clock, calendar, Grocery and To-do. Tap an item to tick it off. &ldquo;Full app&rdquo; leaves it; it comes back after 3 minutes untouched. Saved on this phone only.</div>
     <div style="height:1px;background:#E8E4DC;margin:16px 0"></div>
     <details id="customCatsDetails">
       <summary style="font-size:13px;color:#7A8772;cursor:pointer;padding:4px 2px">&#x1F3F7;&#xFE0F; Custom categories</summary>
@@ -1175,6 +1192,7 @@
 <!--@include js/18b-alexa-inbox.js-->
 <!--@include js/19-swipe-more.js-->
 <!--@include js/20-home.js-->
+<!--@include js/20b-wall.js-->
 <!--@include js/21-train.js-->
 <!--@include js/22-pullup-log-tdee.js-->
 <!--@include js/23-baby.js-->

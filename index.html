@@ -258,6 +258,24 @@ body.home-mode .bn-btn{color:#736856}
 .hcal-loc{display:block;font-size:12px;color:#A89A80}
 .hcal-none{font-size:13px;color:#A89A80;padding:2px 0}
 .hcal-more{font-size:12px;font-weight:600;color:#A89A80;padding:6px 0 2px}
+/* Always-on wall screen (v528) — covers header + nav, sits below overlays/toasts */
+.wall{position:fixed;top:0;right:0;bottom:0;left:0;z-index:380;background:#F4EEE4;color:#2A2010;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:max(16px,env(safe-area-inset-top,0px)) 16px max(24px,env(safe-area-inset-bottom,0px))}
+body.wall-on{overflow:hidden}
+.wall-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
+.wall-time{font-family:Georgia,serif;font-size:56px;font-weight:600;line-height:1;letter-spacing:-1px}
+.wall-date{font-size:16px;font-weight:600;color:#8A7A5A;margin-top:4px}
+.wall-exit{flex:0 0 auto;border:1px solid #D8CFC0;background:#fff;color:#7A5A30;border-radius:18px;padding:8px 14px;font-size:13px;font-weight:600;min-height:40px}
+.wall .home-cal .hcal-what{font-size:16px}
+.wall-card{background:#fff;box-shadow:0 1px 4px rgba(20,50,20,.07);border-radius:14px;padding:11px 14px 6px;margin-bottom:13px}
+.wall-card-head{display:flex;align-items:baseline;justify-content:space-between;font-family:Georgia,serif;font-size:15px;font-weight:600;margin-bottom:4px}
+.wall-count{font-family:inherit;font-size:12px;font-weight:700;color:#8A7A5A}
+.wall-none{font-size:14px;color:#A89A80;padding:4px 0 8px}
+.wall-item{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:6px 0;border:0;border-top:1px solid #F0EBE2;background:none;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.wall-box{flex:0 0 24px;height:24px;border:2px solid #C8BCA8;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff}
+.wall-emo{flex:0 0 auto;font-size:16px}
+.wall-name{flex:1;min-width:0;font-size:17px;line-height:1.3;overflow-wrap:anywhere}
+.wall-done .wall-box{background:#2D6B35;border-color:#2D6B35}
+.wall-done .wall-name{text-decoration:line-through;color:#A89A80}
 
 /* Weather detail sheet */
 .hw-hourly-label{font-size:11px;font-weight:700;color:#8A7A5A;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
@@ -953,7 +971,7 @@ li.rcp-done.rcp-ing{text-decoration:line-through}
   <div class="home-content">
 
     <!-- Version label (v526: moved from the bottom of Home to a discreet top-right line) -->
-    <div style="text-align:right;margin:-4px 0 2px;font-size:10px;color:#C8BEA8;font-weight:600;letter-spacing:.4px" id="appVersionLabel">v527 · 15/11/2026</div>
+    <div style="text-align:right;margin:-4px 0 2px;font-size:10px;color:#C8BEA8;font-weight:600;letter-spacing:.4px" id="appVersionLabel">v528 · 21/11/2026</div>
 
     <!-- Greeting -->
     <div class="home-greeting">
@@ -1797,6 +1815,16 @@ li.rcp-done.rcp-ing{text-decoration:line-through}
   </div>
 </div>
 
+<!-- Always-on wall screen (v528) — device-local, sits over Home; see 20b-wall.js -->
+<div id="wallScreen" class="wall" style="display:none" aria-hidden="true">
+  <div class="wall-top">
+    <div><div class="wall-time" id="wallTime"></div><div class="wall-date" id="wallDate"></div></div>
+    <button class="wall-exit" id="wallExit" aria-label="Leave the wall screen">Full app</button>
+  </div>
+  <div class="home-cal" id="wallCalendar"></div>
+  <div id="wallLists"></div>
+</div>
+
 <!-- SETTINGS MODAL -->
 <div class="overlay" id="settingsOverlay">
   <div class="modal-box" style="position:relative">
@@ -1854,6 +1882,13 @@ li.rcp-done.rcp-ing{text-decoration:line-through}
         <label class="toggle-switch"><input type="checkbox" class="section-chk" data-sec="famlog"><span class="toggle-slider"></span></label>
       </div>
     </div>
+    <div style="height:1px;background:#E8E4DC;margin:16px 0"></div>
+    <div class="sync-section-title" style="margin-bottom:8px">Always-on screen</div>
+    <div class="sync-toggle-row">
+      <span class="sync-toggle-label">&#x1F5BC;&#xFE0F; Use this phone as a wall screen</span>
+      <label class="toggle-switch"><input type="checkbox" id="wallModeChk"><span class="toggle-slider"></span></label>
+    </div>
+    <div style="font-size:12px;color:#7A8772;margin:4px 2px 0;line-height:1.5">Shows just the clock, calendar, Grocery and To-do. Tap an item to tick it off. &ldquo;Full app&rdquo; leaves it; it comes back after 3 minutes untouched. Saved on this phone only.</div>
     <div style="height:1px;background:#E8E4DC;margin:16px 0"></div>
     <details id="customCatsDetails">
       <summary style="font-size:13px;color:#7A8772;cursor:pointer;padding:4px 2px">&#x1F3F7;&#xFE0F; Custom categories</summary>
@@ -18712,6 +18747,8 @@ function flushSyncRenders(dirty) {
   // AFTER renderList, which rebuilds the tab bar they attach to).
   if (dirty.dots)                                                       safeRender("listDots", updateListTabDots);
   if (dirty.home    && currentSection === "home")                       safeRender("home",    renderHomeScreen);
+  // v528: the wall screen sits over Home; redraw its lists on any list change.
+  if ((dirty.list || dirty.home) && wallIsShowing())                    safeRender("wall",    wallRenderLists);
   if (dirty.train   && currentSection === "train")                      safeRender("train",   renderTrainView);
 }
 
@@ -21377,9 +21414,14 @@ function hcalDayLabel(ds, todayStr, tomorrowStr) {
   var p = ds.split("-"), d = new Date(+p[0], +p[1] - 1, +p[2]);
   return ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()] + " " + d.getDate();
 }
+// v528: the same card is painted on the always-on wall screen too.
 function hcalPaint(rec, stale) {
-  var card = document.getElementById("homeCalendar");
-  if (!card) return;
+  ["homeCalendar", "wallCalendar"].forEach(function(id){
+    var card = document.getElementById(id);
+    if (card) hcalPaintInto(card, rec, stale);
+  });
+}
+function hcalPaintInto(card, rec, stale) {
   if (!rec) { card.classList.remove("hcal-show"); card.innerHTML = ""; return; }
   var head = "<div class='hcal-head'><span class='hcal-title'>&#x1F4C5; Calendar</span>";
   if (stale && rec.at) {
@@ -22238,6 +22280,185 @@ function addToHistFor(lt, name, catId) {
   listData[lt].hist = capHistToLiveLimit(hist, loadListData(lt).items);
 }
 
+// ============================================================
+// ALWAYS-ON WALL SCREEN (v528)
+// ============================================================
+// An optional, stripped-down screen for the kitchen phone that sits on all
+// day: a big clock, the calendar card, and the Grocery + To-do lists.
+// Confirmed with Cathal 21/11/2026:
+//  - switched on per phone (Settings), saved on THIS phone only
+//    (hearthWallMode, never synced, not in backups) — no other phone changes;
+//  - the lists are TICK-OFF ONLY: adding/editing stays in the full app.
+//    A ticked item stays on the wall struck through for WALL_RECENT_MS, so a
+//    mis-tap at the fridge can be undone with a second tap;
+//  - "Full app" leaves it; it comes back by itself after WALL_IDLE_MS with
+//    no touch, but only when nothing could be lost (wallIdleBlocker).
+// It is an overlay on top of Home, not a new section: Home keeps running
+// underneath, so the Home clock tick keeps the calendar fetched (hcalPaint
+// paints #wallCalendar too) and the v524 auto-update still sees "on Home".
+// Ticks go through toggleItem itself (wallToggle) so repeat tasks, Track
+// auto-log, history and sync all behave exactly as a tick in Lists — do NOT
+// re-implement the tick here.
+var WALL_KEY = "hearthWallMode";
+var WALL_LISTS = ["grocery", "todo"];
+var WALL_IDLE_MS = 3 * 60 * 1000;
+var WALL_RECENT_MS = 10 * 60 * 1000;
+var _wallShowing = false;
+var _wallBootShown = false;
+var _wallTimer = null;
+
+function wallEnabled() {
+  try { return localStorage.getItem(WALL_KEY) === "1"; } catch (e) { return false; }
+}
+function wallIsShowing() { return _wallShowing; }
+
+// Why it must NOT come back on its own right now ("" = safe). The same
+// checks the v524 auto-reload uses (overlay, focused field, typed text,
+// quick-add, session) plus every section's own "editor open" flag, because
+// returning to Home from an open editor would hide it.
+function wallIdleBlocker(now) {
+  if (now - _lastUserInput < WALL_IDLE_MS) return "recent input";
+  var lo = document.getElementById("loginOverlay");
+  if (lo && getComputedStyle(lo).display !== "none") return "signed out";
+  var flags = ["_recipeEditing", "_tripEditing", "_plantEditing", "_plantImporting", "_watchEditing",
+               "_applEditing", "_healthEditing", "_projEditing", "_golfEditing"];
+  for (var i = 0; i < flags.length; i++) {
+    if (typeof window[flags[i]] !== "undefined" && window[flags[i]]) return "editor open";
+  }
+  try { if (medDraftOpen() || tempDraftOpen()) return "editor open"; } catch (e) {}
+  return uiBusyReason();
+}
+
+function wallShow() {
+  if (!wallEnabled()) return;
+  if (currentSection !== "home") switchSection("home");
+  var el = document.getElementById("wallScreen");
+  if (!el) return;
+  _wallShowing = true;
+  _wallBootShown = true;
+  el.style.display = "block";
+  el.setAttribute("aria-hidden", "false");
+  document.body.classList.add("wall-on");
+  wallRender();
+  try { renderHomeCalendar(); } catch (e) {}
+}
+function wallHide() {
+  var el = document.getElementById("wallScreen");
+  _wallShowing = false;
+  if (el) { el.style.display = "none"; el.setAttribute("aria-hidden", "true"); }
+  document.body.classList.remove("wall-on");
+  _lastUserInput = Date.now(); // the idle wait starts from leaving it
+}
+function wallSetEnabled(on) {
+  try { if (on) localStorage.setItem(WALL_KEY, "1"); else localStorage.removeItem(WALL_KEY); } catch (e) {}
+  if (on) {
+    document.getElementById("settingsOverlay").classList.remove("open");
+    wallShow();
+  } else {
+    wallHide();
+  }
+}
+
+function wallRenderClock() {
+  var t = document.getElementById("wallTime"), d = document.getElementById("wallDate");
+  if (!t || !d) return;
+  var now = new Date();
+  t.textContent = ("0" + now.getHours()).slice(-2) + ":" + ("0" + now.getMinutes()).slice(-2);
+  d.textContent = now.toLocaleDateString("en-IE", { weekday: "long", day: "numeric", month: "long" });
+}
+
+// Items still to do, plus ones ticked in the last few minutes (shown struck
+// through, so a second tap undoes a mis-tap). Grocery is grouped in the same
+// category order as the list itself.
+function wallListItems(lt, now) {
+  var items = (loadListData(lt).items || []).filter(function(it){
+    return it && it.name && (!it.done || (it.updated && now - it.updated < WALL_RECENT_MS));
+  });
+  var order = {};
+  getAllCats(lt).forEach(function(c, i){ order[c.id] = i; });
+  return items.map(function(it, i){ return { it: it, i: i }; }).sort(function(a, b){
+    if (!!a.it.done !== !!b.it.done) return a.it.done ? 1 : -1;
+    var ca = (a.it.catId in order) ? order[a.it.catId] : 999, cb = (b.it.catId in order) ? order[b.it.catId] : 999;
+    return ca !== cb ? ca - cb : a.i - b.i;
+  }).map(function(x){ return x.it; });
+}
+
+function wallRenderLists() {
+  var box = document.getElementById("wallLists");
+  if (!box) return;
+  var now = Date.now(), html = "";
+  WALL_LISTS.forEach(function(lt){
+    var items = wallListItems(lt, now);
+    var left = items.filter(function(it){ return !it.done; }).length;
+    var cats = {};
+    getAllCats(lt).forEach(function(c){ cats[c.id] = c; });
+    html += "<div class='wall-card'><div class='wall-card-head'><span>" + LIST_TYPES[lt].name + "</span>" +
+      "<span class='wall-count'>" + (left ? left + " to do" : "") + "</span></div>";
+    if (!items.length) html += "<div class='wall-none'>Nothing on the list</div>";
+    items.forEach(function(it){
+      var c = cats[it.catId];
+      html += "<button class='wall-item" + (it.done ? " wall-done" : "") + "' data-lt='" + lt + "' data-id='" + esc(String(it.id)) + "'>" +
+        "<span class='wall-box'>" + (it.done ? "&#x2713;" : "") + "</span>" +
+        (c ? "<span class='wall-emo'>" + catEmojiSafe(c.emoji) + "</span>" : "") +
+        "<span class='wall-name'>" + esc(it.name) + "</span></button>";
+    });
+    html += "</div>";
+  });
+  box.innerHTML = html;
+}
+
+function wallRender() {
+  wallRenderClock();
+  wallRenderLists();
+}
+
+// Tick through the real list code with the wall's list swapped in for the
+// moment, then put the user's own list back.
+function wallToggle(lt, idStr) {
+  if (WALL_LISTS.indexOf(lt) === -1) return;
+  var items = loadListData(lt).items || [], target = null;
+  for (var i = 0; i < items.length; i++) { if (items[i] && String(items[i].id) === idStr) { target = items[i]; break; } }
+  if (!target) return;
+  var prev = currentList;
+  currentList = lt;
+  try { toggleItem(target.id); } finally { currentList = prev; }
+  // toggleItem redrew the hidden Lists view for `lt`; redraw the user's own
+  // list so it is right if they open Lists without switching section.
+  try { if (prev !== "notes") renderList(); } catch (e) {}
+  wallRenderLists();
+}
+
+function wallTick() {
+  if (!wallEnabled()) { if (_wallShowing) wallHide(); return; }
+  if (_wallShowing) { wallRender(); return; }
+  // First show after the app opens: as soon as it is signed in and on Home.
+  if (!_wallBootShown) {
+    var lo = document.getElementById("loginOverlay");
+    if (typeof currentSection !== "undefined" && currentSection === "home" && !(lo && getComputedStyle(lo).display !== "none")) {
+      _wallBootShown = true;
+      wallShow();
+    }
+    return;
+  }
+  if (!wallIdleBlocker(Date.now())) wallShow();
+}
+
+(function wallInit() {
+  var chk = document.getElementById("wallModeChk");
+  if (chk) chk.addEventListener("change", function(){ wallSetEnabled(chk.checked); });
+  document.getElementById("settingsBtn").addEventListener("click", function(){
+    if (chk) chk.checked = wallEnabled();
+  });
+  var exit = document.getElementById("wallExit");
+  if (exit) exit.addEventListener("click", wallHide);
+  var lists = document.getElementById("wallLists");
+  if (lists) lists.addEventListener("click", function(e){
+    var b = e.target.closest(".wall-item");
+    if (b) wallToggle(b.dataset.lt, b.dataset.id);
+  });
+  _wallTimer = setInterval(wallTick, 15000);
+  setTimeout(wallTick, 500);
+})();
 // ============================================================
 // TRAIN MODULE
 // ============================================================
@@ -27566,6 +27787,12 @@ var _autoUpdateTarget = "";
 function autoUpdateBlocker(now) {
   if (typeof currentSection !== "undefined" && currentSection !== "home") return "not on Home";
   if (now - _lastUserInput < AUTO_UPDATE_IDLE_MS) return "recent input";
+  return uiBusyReason();
+}
+
+// v528: the "could anyone lose something?" half of autoUpdateBlocker, shared
+// with the wall screen's return-after-idle (wallIdleBlocker, 20b-wall.js).
+function uiBusyReason() {
   var a = document.activeElement;
   if (a && a !== document.body && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))) return "field focused";
   if (document.querySelector(".overlay.open, #toothModal.open, [aria-modal='true']")) return "dialog open";
