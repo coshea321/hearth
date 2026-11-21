@@ -1130,6 +1130,7 @@ function renderRecipes() {
         "<button id='rcpTidyBtn' class='more-row'><span class='more-ico'>&#x1F9F9;</span><span class='more-name'>Tidy</span></button>" +
         "<button id='rcpPrepBtn' class='more-row'><span class='more-ico'>&#x1F4DD;</span><span class='more-name'>Prep helper</span></button>" +
         "<button id='rcpCalBtn' class='more-row'><span class='more-ico'>&#x1F525;</span><span class='more-name'>Calories</span></button>" +
+        "<button id='rcpExportBtn' class='more-row'><span class='more-ico'>&#x1F4E4;</span><span class='more-name'>Export</span></button>" +
         "<button id='rcpSelStart' class='more-row'><span class='more-ico'>&#x2713;</span><span class='more-name'>Select</span></button>" +
       "</div>" +
     "</div>";
@@ -1274,6 +1275,11 @@ function renderRecipes() {
     _calHelperState = null;       // always rebuild the export against what's stored now
     _recipeView = "calhelper";
     renderRecipes();
+  });
+  var _rcpExportBtn = document.getElementById("rcpExportBtn");
+  if (_rcpExportBtn) _rcpExportBtn.addEventListener("click", function(){
+    if (_rcpToolsOverlay) _rcpToolsOverlay.classList.remove("open");
+    openRecipeExportSheet();
   });
   var _selStart = document.getElementById("rcpSelStart");
   if (_selStart) _selStart.addEventListener("click", function(){ _recipeSelectMode = true; _recipeSelected = {}; renderRecipes(); });
