@@ -242,6 +242,26 @@ body.home-mode .bn-btn{color:#736856}
 .hcal-loc{display:block;font-size:12px;color:#A89A80}
 .hcal-none{font-size:13px;color:#A89A80;padding:2px 0}
 .hcal-more{font-size:12px;font-weight:600;color:#A89A80;padding:6px 0 2px}
+/* Always-on wall screen (v528) — covers header + nav, sits below overlays/toasts */
+.wall{position:fixed;top:0;right:0;bottom:0;left:0;z-index:380;background:#F4EEE4;color:#2A2010;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:max(16px,env(safe-area-inset-top,0px)) 16px max(24px,env(safe-area-inset-bottom,0px))}
+body.wall-on{overflow:hidden}
+.wall-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
+.wall-time{font-family:Georgia,serif;font-size:56px;font-weight:600;line-height:1;letter-spacing:-1px}
+.wall-date{font-size:16px;font-weight:600;color:#8A7A5A;margin-top:4px}
+.wall-exit{flex:0 0 auto;border:1px solid #D8CFC0;background:#fff;color:#7A5A30;border-radius:18px;padding:8px 14px;font-size:13px;font-weight:600;min-height:40px}
+.wall .home-cal .hcal-what{font-size:16px}
+.wall-card{background:#fff;box-shadow:0 1px 4px rgba(20,50,20,.07);border-radius:14px;padding:11px 14px 6px;margin-bottom:13px}
+.wall-card-head{display:flex;align-items:baseline;justify-content:space-between;font-family:Georgia,serif;font-size:15px;font-weight:600;margin-bottom:4px}
+.wall-count{font-family:inherit;font-size:12px;font-weight:700;color:#8A7A5A}
+.wall-none{font-size:14px;color:#A89A80;padding:4px 0 8px}
+.wall-item{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:6px 0;border:0;border-top:1px solid #F0EBE2;background:none;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.wall-box{flex:0 0 24px;height:24px;border:2px solid #C8BCA8;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff}
+.wall-emo{flex:0 0 auto;font-size:16px}
+.wall-name{flex:1;min-width:0;font-size:17px;line-height:1.3;overflow-wrap:anywhere}
+.wall-done .wall-box{background:#2D6B35;border-color:#2D6B35}
+.wall-done .wall-name{text-decoration:line-through;color:#A89A80}
+.wall-next{display:block;font-size:12px;font-weight:600;color:#2D6B35;text-decoration:none}
+.wall-item:disabled{cursor:default}
 
 /* Weather detail sheet */
 .hw-hourly-label{font-size:11px;font-weight:700;color:#8A7A5A;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
