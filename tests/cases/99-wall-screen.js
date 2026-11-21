@@ -14,7 +14,7 @@ module.exports = {
       function ok(name, cond, detail){ if (cond) pass.push(name); else fail.push({name:name, detail:detail || 'assertion failed'}); }
       var savedInput = _lastUserInput, savedList = currentList, savedSection = currentSection;
       var el = document.getElementById('wallScreen');
-      var added = null;
+      var added = null, addedTodo = null;
       try {
         ok('off by default', !wallEnabled() && el.style.display === 'none', localStorage.getItem('hearthWallMode'));
         _lastUserInput = Date.now() - 10 * 60 * 1000;
@@ -45,6 +45,21 @@ module.exports = {
         btn.click();
         ok('second tap undoes it', added.done === false);
 
+        // Codex on #305: a repeating To-do reschedules on the tick, so the
+        // wall must show it done (with the next date) and lock it, not let a
+        // second tap skip another occurrence.
+        var t = loadListData('todo');
+        var rep = { id: 990000002, name: 'Wall test bins', catId: 'other', done: false, repeat: 'daily', dueDate: todayStr(), updated: Date.now() - 3600000 };
+        t.items.push(rep); addedTodo = rep;
+        wallRenderLists();
+        el.querySelector(".wall-item[data-id='990000002']").click();
+        var due1 = rep.dueDate;
+        ok('repeat tick reschedules it', rep.done === false && due1 > todayStr(), due1);
+        var rb = el.querySelector(".wall-item[data-id='990000002']");
+        ok('repeat shows done with next due date', rb && rb.classList.contains('wall-done') && rb.disabled && /next due/.test(rb.textContent), rb && rb.outerHTML);
+        wallToggle('todo', '990000002');
+        ok('second tap does not skip another occurrence', rep.dueDate === due1, rep.dueDate);
+
         document.getElementById('wallExit').click();
         ok('Full app leaves it', !wallIsShowing() && el.style.display === 'none');
         wallTick();
@@ -68,6 +83,7 @@ module.exports = {
         try { localStorage.removeItem('hearthWallMode'); } catch (e) {}
         if (wallIsShowing()) wallHide();
         if (added) { var gi = loadListData('grocery').items, k = gi.indexOf(added); if (k !== -1) gi.splice(k, 1); storeSet(LIST_CONFIG.grocery.key, loadListData('grocery')); }
+        if (addedTodo) { var ti = loadListData('todo').items, j = ti.indexOf(addedTodo); if (j !== -1) ti.splice(j, 1); storeSet(LIST_CONFIG.todo.key, loadListData('todo')); }
         currentList = savedList;
         _lastUserInput = savedInput;
         switchSection(savedSection || 'home');
