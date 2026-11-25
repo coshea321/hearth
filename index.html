@@ -25339,6 +25339,8 @@ function renphoWeightsFromCSV(text) {
     var cols = splitCSVLine(lines[i]);
     var m = /^(\d{4})[.\-\/](\d{1,2})[.\-\/](\d{1,2})$/.exec(cols[di] || "");
     if (!m) continue;
+    var cd = new Date(+m[1], +m[2] - 1, +m[3]);
+    if (cd.getFullYear() !== +m[1] || cd.getMonth() !== +m[2] - 1 || cd.getDate() !== +m[3]) continue; // 2026.02.30 / month 00
     var date = m[1] + "-" + t2(+m[2]) + "-" + t2(+m[3]);
     if (date > today) continue;
     var w = parseFloat(cols[wi]);

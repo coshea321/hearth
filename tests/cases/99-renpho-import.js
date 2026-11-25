@@ -2,7 +2,7 @@
 
 // v530: Renpho CSV weight import (Track → Body). Pins: columns found by
 // header name, "--" rows skipped, latest reading per day wins, future dates
-// skipped, existing days are kept (never overwritten), and imports land on
+// skipped, impossible dates (02.30, month 00) skipped, existing days are kept (never overwritten), and imports land on
 // the person picked in Track.
 
 module.exports = {
@@ -19,7 +19,9 @@ module.exports = {
         '4,2026.11.24,12:04:30,82.20,30.6,28.6,,\\n' +
         '5,2026.10.02,11:15:00,84.00,31.2,--,,\\n' +
         '6,2026.10.01,11:15:00,--,--,--,,\\n' +
-        '7,2999.01.01,09:00:00,80.00,30,--,,\\n';
+        '7,2999.01.01,09:00:00,80.00,30,--,,\\n' +
+        '8,2026.02.30,09:00:00,80.00,30,--,,\\n' +
+        '9,2026.00.15,09:00:00,80.00,30,--,,\\n';
       var rows = renphoWeightsFromCSV(csv);
       ok('parses three days', rows && rows.length === 3, JSON.stringify(rows));
       ok('newest first, ISO dates', rows && rows[0].date === '2026-11-25' && rows[2].date === '2026-10-02', JSON.stringify(rows));
