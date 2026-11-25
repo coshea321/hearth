@@ -596,6 +596,7 @@ body.train-mode #toast{background:#3A3328}
 .bw-unit{color:#8A7A5A;font-size:14px;font-weight:700;flex-shrink:0}
 .bw-log-btn{touch-action:manipulation;-webkit-tap-highlight-color:transparent;padding:11px 18px;border:none;background:#3B6FE0;color:#fff;border-radius:9px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;transition:opacity .15s;flex-shrink:0}
 .bw-log-btn:active{opacity:.8}
+.bw-import-btn{touch-action:manipulation;margin-top:10px;padding:6px 10px;background:none;border:1.5px solid #C9D6F5;border-radius:8px;color:#3B6FE0;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer}
 .bw-entry{display:flex;align-items:center;padding:9px 0;border-bottom:1px solid #fff}
 .bw-entry:last-child{border-bottom:none}
 .bw-entry-date{font-size:13px;color:#8A7A5A;flex:1}
